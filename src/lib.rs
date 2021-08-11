@@ -1,3 +1,6 @@
+extern crate async_std;
+
+use async_std::prelude::*;
 use std::{
     error,
     io::{self, Read, Write},
@@ -110,6 +113,64 @@ pub fn tcp_write(ctx: &Context, stream: &mut net::TcpStream, bts: &[u8]) -> io::
             }
         }
     }
+}
+
+pub async fn tcp_read_async(
+    ctx: &Context,
+    stream: &mut async_std::net::TcpStream,
+    ln: usize,
+) -> io::Result<Box<[u8]>> {
+    if ln <= 0 {
+        return Ok(Box::new([0u8; 0]));
+    }
+    let mut rn = 0usize;
+    let mut data = vec![0u8; ln];
+    while rn < ln {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.read(&mut data[rn..]).await {
+            Ok(n) => {
+                if n > 0 {
+                    rn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(io::ErrorKind::Other, "read err!"));
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(data.into_boxed_slice())
+}
+pub async fn tcp_write_async(
+    ctx: &Context,
+    stream: &mut async_std::net::TcpStream,
+    bts: &[u8],
+) -> io::Result<usize> {
+    if bts.len() <= 0 {
+        return Ok(0);
+    }
+    let mut wn = 0usize;
+    while wn < bts.len() {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.write(&bts[wn..]).await {
+            Err(e) => return Err(e),
+            Ok(n) => {
+                if n > 0 {
+                    wn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+                }
+            }
+        }
+    }
+    Ok(wn)
 }
 
 #[derive(Clone)]
