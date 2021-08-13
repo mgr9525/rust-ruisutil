@@ -210,9 +210,8 @@ impl ByteBoxBuf {
         }
         let mut frt = Self::new();
         let mut pos_real = pos;
-        while let Some(mut v) = self.list.pop_front() {
+        while let Some(mut v) = self.pull() {
             let ln = v.len();
-            self.count -= ln;
             if pos_real < ln {
                 let rgt = v.cut(pos_real)?;
                 frt.push(v);
@@ -241,7 +240,13 @@ impl ByteBoxBuf {
 
 impl Read for ByteBoxBuf {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if let Some(mut it) = self.list.pop_front() {
+        if let Some(mut it) = self.pull() {
+            /* println!(
+                "test ByteBoxBuf read:{}/{}/{}",
+                buf.len(),
+                it.len(),
+                self.len()
+            ); */
             if buf.len() == it.len() {
                 buf.copy_from_slice(&it[..]);
                 return Ok(it.len());
@@ -251,7 +256,7 @@ impl Read for ByteBoxBuf {
                 return Ok(it.len());
             } else if buf.len() < it.len() {
                 if let Ok(rgt) = it.cut(buf.len()) {
-                    self.list.push_front(rgt);
+                    self.push_front(rgt);
                 }
                 buf.copy_from_slice(&it[..]);
                 return Ok(it.len());
