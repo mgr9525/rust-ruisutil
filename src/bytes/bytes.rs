@@ -1,6 +1,6 @@
 use std::{
     collections::{linked_list, LinkedList},
-    io::{self, Read},
+    io::{self, Read, Write},
     ops::Deref,
     sync::Arc,
 };
@@ -33,15 +33,29 @@ impl ByteBox {
         if posd < self.start || posd >= self.end {
             Err(ioerr("pos err", None))
         } else {
-            let tnd = self.end;
-            self.end = posd;
-            Ok(Self {
+            let rt = Self {
                 start: posd,
-                end: tnd,
+                end: self.end,
                 data: self.data.clone(),
-            })
+            };
+            self.end = posd;
+            Ok(rt)
         }
     }
+    /* pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
+        let posd = pos + self.start;
+        if posd < self.start || posd >= self.end {
+            Err(ioerr("pos err", None))
+        } else {
+            let rt = Self {
+                start: self.start,
+                end: posd,
+                data: self.data.clone(),
+            };
+            self.start = posd;
+            Ok(rt)
+        }
+    } */
     /* pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
         if pos <= self.start || pos >= self.end {
             Err(ioerr("pos err", None))
@@ -128,6 +142,9 @@ impl ByteBoxBuf {
             }
         }
     }
+    pub fn clear(&mut self) {
+        self.list.clear();
+    }
     pub fn iter(&self) -> linked_list::Iter<ByteBox> {
         self.list.iter()
     }
@@ -197,9 +214,9 @@ impl ByteBoxBuf {
             let ln = v.len();
             self.count -= ln;
             if pos_real < ln {
-                let frs = v.cut(pos_real)?;
+                let rgt = v.cut(pos_real)?;
                 frt.push(v);
-                self.push_front(frs);
+                self.push_front(rgt);
                 break;
             } else {
                 pos_real -= ln;
@@ -222,15 +239,37 @@ impl ByteBoxBuf {
     }
 }
 
-/* impl Read for ByteBoxBuf {
+impl Read for ByteBoxBuf {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self.list.front() {
-            None => Ok(0),
-            Some(it) => {
-                let rn = 0usize;
-
-                Ok(rn)
+        if let Some(mut it) = self.list.pop_front() {
+            if buf.len() == it.len() {
+                buf.copy_from_slice(&it[..]);
+                return Ok(it.len());
+            } else if buf.len() > it.len() {
+                let bufs = &mut buf[..it.len()];
+                bufs.copy_from_slice(&it[..it.len()]);
+                return Ok(it.len());
+            } else if buf.len() < it.len() {
+                if let Ok(rgt) = it.cut(buf.len()) {
+                    self.list.push_front(rgt);
+                }
+                buf.copy_from_slice(&it[..]);
+                return Ok(it.len());
             }
-        }
+        };
+        Ok(0)
     }
-} */
+}
+impl Write for ByteBoxBuf {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut bts = vec![0u8; buf.len()].into_boxed_slice();
+        bts.copy_from_slice(buf);
+        self.push_start(Arc::new(bts), 0);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        // self.clear();
+        Ok(())
+    }
+}
