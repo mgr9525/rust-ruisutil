@@ -13,6 +13,7 @@ pub use contianer::ArcMutBox;
 pub use timer::Timer;
 
 pub mod bytes;
+pub mod message;
 mod contianer;
 mod timer;
 
