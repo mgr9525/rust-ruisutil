@@ -5,7 +5,7 @@ use std::{
 
 #[derive(Clone)]
 pub struct ArcMutBox<T> {
-    ptr: u64,
+    ptrs: u64,
     inner: Arc<T>,
 }
 impl<T> Deref for ArcMutBox<T> {
@@ -26,11 +26,14 @@ impl<T> ArcMutBox<T> {
     pub fn new(t: T) -> Self {
         let inr = Arc::new(t);
         Self {
-            ptr: (&*inr) as *const T as u64,
+            ptrs: (&*inr) as *const T as u64,
             inner: inr,
         }
     }
     pub unsafe fn inners<'a>(&'a self) -> &'a mut T {
-        &mut *(self.ptr as *mut T)
+        &mut *(self.ptrs as *mut T)
+    }
+    pub fn ptr(&self)->u64{
+      self.ptrs
     }
 }
