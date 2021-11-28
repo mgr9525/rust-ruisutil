@@ -137,7 +137,7 @@ pub async fn tcp_read_async(
                 } else {
                     // let bts=&data[..];
                     // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "read err!"));
+                    return Err(io::Error::new(io::ErrorKind::Other, format!("read err len:{}!",n)));
                 }
             }
             Err(e) => return Err(e),
