@@ -3,10 +3,17 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone)]
 pub struct ArcMutBox<T> {
     ptrs: u64,
     inner: Arc<T>,
+}
+impl<T> Clone for ArcMutBox<T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptrs: self.ptrs,
+            inner: self.inner.clone(),
+        }
+    }
 }
 impl<T> Deref for ArcMutBox<T> {
     type Target = T;
@@ -33,7 +40,7 @@ impl<T> ArcMutBox<T> {
     pub unsafe fn inners<'a>(&'a self) -> &'a mut T {
         &mut *(self.ptrs as *mut T)
     }
-    pub fn ptr(&self)->u64{
-      self.ptrs
+    pub fn ptr(&self) -> u64 {
+        self.ptrs
     }
 }

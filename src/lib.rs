@@ -281,8 +281,46 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
+    use crate::ArcMutBox;
+
     #[test]
     fn it_works() {
         assert_eq!(2 + 2, 4);
+    }
+
+    struct Inner{
+      i:i32,
+    }
+    #[derive(Clone)]
+    struct Ruis{
+      x:ArcMutBox<Inner>,
+    }
+    impl Ruis{
+      pub fn new()->Self{
+        Self{
+          x:ArcMutBox::new(Inner{
+            i:1
+          })
+        }
+      }
+
+      pub fn set(&self,i:i32){
+        unsafe{self.x.inners().i=i;}
+      }
+      pub fn get(&self)->i32{
+        self.x.i
+      }
+    }
+    
+    #[test]
+    fn contias(){
+      let ruis=Ruis::new();
+      println!("ruis i-1:{}",ruis.get());
+      ruis.set(2);
+      println!("ruis i-2:{}",ruis.get());
+      ruis.set(3);
+      let ruis1=ruis.clone();
+      ruis1.set(4);
+      println!("ruis i-3:{}",ruis.get());
     }
 }
