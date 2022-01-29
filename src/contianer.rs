@@ -26,7 +26,7 @@ impl<T> DerefMut for ArcMutBox<T> {
     // type Target = T;
 
     fn deref_mut(&mut self) -> &mut T {
-        unsafe { self.inners() }
+        unsafe { self.muts() }
     }
 }
 impl<T> ArcMutBox<T> {
@@ -37,7 +37,7 @@ impl<T> ArcMutBox<T> {
             inner: inr,
         }
     }
-    pub unsafe fn inners<'a>(&'a self) -> &'a mut T {
+    pub unsafe fn muts<'a>(&'a self) -> &'a mut T {
         &mut *(self.ptrs as *mut T)
     }
     pub fn ptr(&self) -> u64 {

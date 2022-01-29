@@ -293,22 +293,23 @@ mod tests {
     }
     #[derive(Clone)]
     struct Ruis{
-      x:ArcMutBox<Inner>,
+      inner:ArcMutBox<Inner>,
     }
     impl Ruis{
       pub fn new()->Self{
         Self{
-          x:ArcMutBox::new(Inner{
+          inner:ArcMutBox::new(Inner{
             i:1
           })
         }
       }
 
       pub fn set(&self,i:i32){
-        unsafe{self.x.inners().i=i;}
+        let ins=unsafe{self.inner.muts()};
+        ins.i=i;
       }
       pub fn get(&self)->i32{
-        self.x.i
+        self.inner.i
       }
     }
     
