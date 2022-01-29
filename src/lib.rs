@@ -1,6 +1,8 @@
+extern crate rand;
 extern crate async_std;
 
 use async_std::prelude::*;
+use rand::{Rng, distributions::Standard, prelude::Distribution};
 use std::{
     error,
     io::{self, Read, Write},
@@ -174,6 +176,29 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
+pub fn rands<T>()->T
+where Standard: Distribution<T>{
+  let mut rng = rand::thread_rng();
+  rng.gen()
+}
+pub fn randgs(a:i32,b:i32)->i32{
+  let mut rng = rand::thread_rng();
+  rng.gen_range(a..b)
+}
+pub fn random(ln:usize)->String{
+  let mut res=String::new();
+  if ln<=0{
+    return res;
+  }
+  let mut rng = rand::thread_rng();
+  const BS: &[u8]=b"0123456789AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+  for _ in 0..ln{
+    let i=rng.gen_range(0..BS.len());
+    res.push(BS[i] as char);
+  }
+  res
+}
+
 #[derive(Clone)]
 pub struct Context {
     inner: Arc<CtxInner>,
@@ -281,7 +306,7 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
-    use crate::ArcMutBox;
+    use crate::{ArcMutBox, random};
 
     #[test]
     fn it_works() {
@@ -323,5 +348,10 @@ mod tests {
       let ruis1=ruis.clone();
       ruis1.set(4);
       println!("ruis i-3:{}",ruis.get());
+    }
+    
+    #[test]
+    fn rands(){
+      println!("randoms:{}",random(32));
     }
 }
