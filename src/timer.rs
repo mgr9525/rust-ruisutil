@@ -3,10 +3,11 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use crate::ArcMut;
+
 #[derive(Clone)]
 pub struct Timer {
-    ptr: u64,
-    inner: Arc<Inner>,
+    inner: ArcMut<Inner>,
 }
 
 struct Inner {
@@ -15,21 +16,15 @@ struct Inner {
 }
 impl Timer {
     pub fn new(dur: Duration) -> Self {
-        let inr = Arc::new(Inner {
-            dur: dur,
-            tms: SystemTime::UNIX_EPOCH,
-        });
-
         Self {
-            ptr: (&*inr) as *const Inner as u64,
-            inner: inr,
+            inner: ArcMut::new(Inner {
+              dur: dur,
+              tms: SystemTime::UNIX_EPOCH,
+          }),
         }
     }
-    unsafe fn inners<'a>(&'a self) -> &'a mut Inner {
-        &mut *(self.ptr as *mut Inner)
-    }
     pub fn reset(&self) {
-        unsafe { self.inners().tms = SystemTime::now() };
+        unsafe { self.inner.muts().tms = SystemTime::now() };
     }
     pub fn tick(&self) -> bool {
         if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
@@ -39,5 +34,14 @@ impl Timer {
             }
         }
         false
+    }
+
+    pub fn tmout(&self)->bool{
+      if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
+          if tm >= self.inner.dur {
+              return true;
+          }
+      }
+      false
     }
 }
