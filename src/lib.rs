@@ -1,4 +1,5 @@
 extern crate async_std;
+extern crate chrono;
 extern crate md5;
 extern crate rand;
 
@@ -8,8 +9,9 @@ use std::{
     error,
     io::{self, Read, Write},
     net,
+    os::unix::prelude::OsStrExt,
     sync::{Arc, Mutex},
-    time::{self, Duration}, os::unix::prelude::OsStrExt,
+    time::{self, Duration},
 };
 
 pub use contianer::ArcMut;
@@ -209,6 +211,18 @@ pub fn random(ln: usize) -> String {
     }
     res
 }
+pub fn strftime<T>(dt: T, s: &str) -> String
+where
+    T: Into<chrono::DateTime<chrono::Local>>,
+{
+    format!("{}", dt.into().format(s))
+}
+pub fn strftime_utc<T>(dt: T, s: &str) -> String
+where
+    T: Into<chrono::DateTime<chrono::Utc>>,
+{
+    format!("{}", dt.into().format(s))
+}
 
 #[derive(Clone)]
 pub struct Context {
@@ -326,7 +340,7 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ArcMut};
+    use crate::ArcMut;
 
     #[test]
     fn it_works() {
@@ -375,6 +389,16 @@ mod tests {
 
     #[test]
     fn md5s() {
-        println!("md5s:{}", crate::md5str("ahsdhflasjdklfjalskdjflksdjlfkjslkdjf"));
+        println!(
+            "md5s:{}",
+            crate::md5str("ahsdhflasjdklfjalskdjflksdjlfkjslkdjf")
+        );
+    }
+
+    #[test]
+    fn tms() {
+        let now = std::time::SystemTime::now();
+        println!("{}", crate::strftime(now.clone(), "%+"));
+        println!("{}", crate::strftime(now.clone(), "%Y-%m-%d %H:%M:%S"));
     }
 }
