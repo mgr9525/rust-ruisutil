@@ -1,14 +1,15 @@
-extern crate rand;
 extern crate async_std;
+extern crate md5;
+extern crate rand;
 
 use async_std::prelude::*;
-use rand::{Rng, distributions::Standard, prelude::Distribution};
+use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::{
     error,
     io::{self, Read, Write},
     net,
     sync::{Arc, Mutex},
-    time::{self, Duration},
+    time::{self, Duration}, os::unix::prelude::OsStrExt,
 };
 
 pub use contianer::ArcMut;
@@ -16,8 +17,8 @@ pub use contianer::ArcMut;
 pub use timer::Timer;
 
 pub mod bytes;
-pub mod message;
 mod contianer;
+pub mod message;
 mod timer;
 
 pub fn byte_2i(bts: &[u8]) -> i64 {
@@ -140,7 +141,10 @@ pub async fn tcp_read_async(
                 } else {
                     // let bts=&data[..];
                     // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, format!("read err len:{}!",n)));
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("read err len:{}!", n),
+                    ));
                 }
             }
             Err(e) => return Err(e),
@@ -177,27 +181,33 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
-pub fn rands<T>()->T
-where Standard: Distribution<T>{
-  let mut rng = rand::thread_rng();
-  rng.gen()
+pub fn md5str<S: Into<String>>(input: S) -> String {
+    let ms = md5::compute(input.into().as_bytes());
+    format!("{:x}", ms)
 }
-pub fn randgs(a:i32,b:i32)->i32{
-  let mut rng = rand::thread_rng();
-  rng.gen_range(a..b)
+pub fn rands<T>() -> T
+where
+    Standard: Distribution<T>,
+{
+    let mut rng = rand::thread_rng();
+    rng.gen()
 }
-pub fn random(ln:usize)->String{
-  let mut res=String::new();
-  if ln<=0{
-    return res;
-  }
-  let mut rng = rand::thread_rng();
-  const BS: &[u8]=b"0123456789AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
-  for _ in 0..ln{
-    let i=rng.gen_range(0..BS.len());
-    res.push(BS[i] as char);
-  }
-  res
+pub fn randgs(a: i32, b: i32) -> i32 {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(a..b)
+}
+pub fn random(ln: usize) -> String {
+    let mut res = String::new();
+    if ln <= 0 {
+        return res;
+    }
+    let mut rng = rand::thread_rng();
+    const BS: &[u8] = b"0123456789AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+    for _ in 0..ln {
+        let i = rng.gen_range(0..BS.len());
+        res.push(BS[i] as char);
+    }
+    res
 }
 
 #[derive(Clone)]
@@ -316,52 +326,55 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ArcMutBox, random};
+    use crate::{ArcMut};
 
     #[test]
     fn it_works() {
         assert_eq!(2 + 2, 4);
     }
 
-    struct Inner{
-      i:i32,
+    struct Inner {
+        i: i32,
     }
     #[derive(Clone)]
-    struct Ruis{
-      inner:ArcMutBox<Inner>,
+    struct Ruis {
+        inner: ArcMut<Inner>,
     }
-    impl Ruis{
-      pub fn new()->Self{
-        Self{
-          inner:ArcMutBox::new(Inner{
-            i:1
-          })
+    impl Ruis {
+        pub fn new() -> Self {
+            Self {
+                inner: ArcMut::new(Inner { i: 1 }),
+            }
         }
-      }
 
-      pub fn set(&self,i:i32){
-        let ins=unsafe{self.inner.muts()};
-        ins.i=i;
-      }
-      pub fn get(&self)->i32{
-        self.inner.i
-      }
+        pub fn set(&self, i: i32) {
+            let ins = unsafe { self.inner.muts() };
+            ins.i = i;
+        }
+        pub fn get(&self) -> i32 {
+            self.inner.i
+        }
     }
-    
+
     #[test]
-    fn contias(){
-      let ruis=Ruis::new();
-      println!("ruis i-1:{}",ruis.get());
-      ruis.set(2);
-      println!("ruis i-2:{}",ruis.get());
-      ruis.set(3);
-      let ruis1=ruis.clone();
-      ruis1.set(4);
-      println!("ruis i-3:{}",ruis.get());
+    fn contias() {
+        let ruis = Ruis::new();
+        println!("ruis i-1:{}", ruis.get());
+        ruis.set(2);
+        println!("ruis i-2:{}", ruis.get());
+        ruis.set(3);
+        let ruis1 = ruis.clone();
+        ruis1.set(4);
+        println!("ruis i-3:{}", ruis.get());
     }
-    
+
     #[test]
-    fn rands(){
-      println!("randoms:{}",random(32));
+    fn rands() {
+        println!("randoms:{}", crate::random(32));
+    }
+
+    #[test]
+    fn md5s() {
+        println!("md5s:{}", crate::md5str("ahsdhflasjdklfjalskdjflksdjlfkjslkdjf"));
     }
 }
