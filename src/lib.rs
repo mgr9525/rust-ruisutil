@@ -284,6 +284,15 @@ impl WaitGroup {
             }
         }
     }
+    pub async fn waits(&self) {
+        loop {
+            async_std::task::sleep(Duration::from_millis(1)).await;
+            let count = self.inner.count.lock().unwrap();
+            if *count <= 1 {
+                break;
+            }
+        }
+    }
 }
 impl Drop for WaitGroup {
     fn drop(&mut self) {
