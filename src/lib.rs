@@ -9,7 +9,6 @@ use std::{
     error,
     io::{self, Read, Write},
     net,
-    os::unix::prelude::OsStrExt,
     sync::{Arc, Mutex},
     time::{self, Duration},
 };
