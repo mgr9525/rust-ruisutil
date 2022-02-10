@@ -9,8 +9,9 @@ use std::{
     error,
     io::{self, Read, Write},
     net,
+    str::FromStr,
     sync::{Arc, Mutex},
-    time::{self, Duration},
+    time::{self, Duration, SystemTime},
 };
 
 pub use contianer::ArcMut;
@@ -222,6 +223,14 @@ where
 {
     format!("{}", dt.into().format(s))
 }
+pub fn strptime(t: &str,s: &str) -> io::Result<SystemTime> {
+    let date = match chrono::DateTime::parse_from_str(t,s) {
+        Err(e) => return Err(crate::ioerr(format!("parse err:{}", e), None)),
+        Ok(v) => v,
+    };
+    let tm = SystemTime::from(date);
+    Ok(tm)
+}
 
 #[derive(Clone)]
 pub struct Context {
@@ -399,5 +408,9 @@ mod tests {
         let now = std::time::SystemTime::now();
         println!("{}", crate::strftime(now.clone(), "%+"));
         println!("{}", crate::strftime(now.clone(), "%Y-%m-%d %H:%M:%S"));
+        match crate::strptime("2022-02-10T15:09:12.309627600+08:00","%+") {
+            Err(e) => println!("strptime err:{}", e),
+            Ok(v) => println!("parse:{}", crate::strftime(v.clone(), "%+")),
+        }
     }
 }
