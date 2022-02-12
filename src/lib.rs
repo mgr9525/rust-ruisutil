@@ -223,8 +223,8 @@ where
 {
     format!("{}", dt.into().format(s))
 }
-pub fn strptime(t: &str,s: &str) -> io::Result<SystemTime> {
-    let date = match chrono::DateTime::parse_from_str(t,s) {
+pub fn strptime(t: &str, s: &str) -> io::Result<SystemTime> {
+    let date = match chrono::DateTime::parse_from_str(t, s) {
         Err(e) => return Err(crate::ioerr(format!("parse err:{}", e), None)),
         Ok(v) => v,
     };
@@ -348,7 +348,7 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
-    use crate::ArcMut;
+    use crate::{bytes::CircleBuf, ArcMut, Context};
 
     #[test]
     fn it_works() {
@@ -408,9 +408,42 @@ mod tests {
         let now = std::time::SystemTime::now();
         println!("{}", crate::strftime(now.clone(), "%+"));
         println!("{}", crate::strftime(now.clone(), "%Y-%m-%d %H:%M:%S"));
-        match crate::strptime("2022-02-10T15:09:12.309627600+08:00","%+") {
+        match crate::strptime("2022-02-10T15:09:12.309627600+08:00", "%+") {
             Err(e) => println!("strptime err:{}", e),
             Ok(v) => println!("parse:{}", crate::strftime(v.clone(), "%+")),
+        }
+    }
+
+    #[test]
+    fn bts() {
+        let bs = b"hellomgr";
+        unsafe { println!("test:{}", std::str::from_utf8_unchecked(&bs[1..2])) };
+        let ctx = Context::background(None);
+        let mut buf = CircleBuf::new(&ctx, 1024);
+
+        let ln = match buf.borrow_write_buf(10240) {
+            Err(e) => {
+                println!("borrow_write_buf err:{}", e);
+                0
+            }
+            Ok(bts) => {
+                let bs = b"mgr";
+                bts[..bs.len()].copy_from_slice(bs);
+                bs.len()
+            }
+        };
+        buf.borrow_write_ok(ln);
+
+        match buf.borrow_read_buf(10) {
+            Err(e) => println!("borrow_read_buf err:{}", e),
+            Ok(v) => {
+                unsafe { println!("borrow_read_buf bts:{}", std::str::from_utf8_unchecked(v)) };
+                buf.borrow_read_ok(v.len());
+            }
+        }
+        match buf.get_byte(0) {
+            Ok(v) => println!("bs:{}", v),
+            Err(e) => println!("err:{}", e),
         }
     }
 }
