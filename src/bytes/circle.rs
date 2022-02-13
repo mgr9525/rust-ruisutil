@@ -146,20 +146,20 @@ impl CircleBuf {
                 Some(io::ErrorKind::InvalidData),
             ));
         }
-        let mut lns = self.start + ln;
+        let mut pos = self.start + ln;
         if self.start < self.end {
-            if lns > self.end {
-                lns = self.end;
+            if pos > self.end {
+                pos = self.end;
             }
         } else {
-            if lns > self.size {
-                lns = self.size
+            if pos > self.size {
+                pos = self.size
             }
         }
-        Ok(&self.data[self.start..lns])
+        Ok(&self.data[self.start..pos])
     }
     pub fn borrow_read_ok(&mut self, ln: usize) -> io::Result<()> {
-        if ln<=0{
+        if ln <= 0 {
             return Ok(());
         }
         if self.closed() {
@@ -184,24 +184,34 @@ impl CircleBuf {
         }
         if self.avail() <= 0 {
             return Err(crate::ioerr(
-                "not has available buf",
+                "not has available buf1",
                 Some(io::ErrorKind::InvalidData),
             ));
         }
-        let mut lns = self.end + ln;
+        let mut pos = self.end + ln;
         if self.end < self.start {
-            if lns > self.start {
-                lns = self.start;
+            if pos >= self.start {
+                // pos = self.start;
+                return Err(crate::ioerr(
+                    "not has available buf2",
+                    Some(io::ErrorKind::InvalidData),
+                ));
             }
         } else {
-            if lns > self.size {
-                lns = self.size
+            if pos >= self.size {
+                pos = self.size;
+                if self.start == 0 {
+                    return Err(crate::ioerr(
+                        "not has available buf3",
+                        Some(io::ErrorKind::InvalidData),
+                    ));
+                }
             }
         }
-        Ok(&mut self.data[self.end..lns])
+        Ok(&mut self.data[self.end..pos])
     }
     pub fn borrow_write_ok(&mut self, ln: usize) -> io::Result<()> {
-        if ln<=0{
+        if ln <= 0 {
             return Ok(());
         }
         if self.closed() {

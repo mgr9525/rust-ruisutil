@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn bts() {
         let bs = b"hellomgr";
-        unsafe { println!("test:{}", std::str::from_utf8_unchecked(&bs[1..2])) };
+        unsafe { println!("test:{}", std::str::from_utf8_unchecked(&bs[1..3])) };
         let ctx = Context::background(None);
         let mut buf = CircleBuf::new(&ctx, 1024);
 
