@@ -458,9 +458,9 @@ mod tests {
         let wgc=wg.clone();
         task::spawn(async move{
           let mut n=0;
-          while n<30*100*5{
+          while n<30*100*2{
             n+=1;
-            task::sleep(Duration::from_millis(2)).await;
+            task::sleep(Duration::from_millis(5)).await;
           }
           println!("task end1!!!!");
           std::mem::drop(wgc);
@@ -468,9 +468,9 @@ mod tests {
         let wgc=wg.clone();
         task::spawn(async move{
           let mut n=0;
-          while n<40*100*5{
+          while n<40*100*2{
             n+=1;
-            task::sleep(Duration::from_millis(2)).await;
+            task::sleep(Duration::from_millis(5)).await;
           }
           println!("task end2!!!!");
           std::mem::drop(wgc);
