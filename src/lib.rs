@@ -348,6 +348,10 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use async_std::task;
+
     use crate::{bytes::CircleBuf, ArcMut, Context};
 
     #[test]
@@ -446,4 +450,36 @@ mod tests {
             Err(e) => println!("err:{}", e),
         }
     }
+
+    #[test]
+    fn wgs() {
+      task::block_on(async move{
+        let wg=crate::WaitGroup::new();
+        let wgc=wg.clone();
+        task::spawn(async move{
+          let mut n=0;
+          while n<30*100*5{
+            n+=1;
+            task::sleep(Duration::from_millis(2)).await;
+          }
+          println!("task end1!!!!");
+          std::mem::drop(wgc);
+        });
+        let wgc=wg.clone();
+        task::spawn(async move{
+          let mut n=0;
+          while n<40*100*5{
+            n+=1;
+            task::sleep(Duration::from_millis(2)).await;
+          }
+          println!("task end2!!!!");
+          std::mem::drop(wgc);
+        });
+        println!("start waits!!!!");
+        wg.waits().await;
+        // task::sleep(Duration::from_secs(40)).await;
+        println!("the end!!!!");
+      });
+    }
+
 }
