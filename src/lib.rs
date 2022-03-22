@@ -183,6 +183,19 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
+pub fn envs(key: &str, defs: &str) -> String {
+    match std::env::var(key) {
+        Err(_) => String::from(defs),
+        Ok(vs) => {
+            if vs.is_empty() {
+                String::from(defs)
+            } else {
+                vs
+            }
+        }
+    }
+}
+
 pub fn md5str<S: Into<String>>(input: S) -> String {
     let ms = md5::compute(input.into().as_bytes());
     format!("{:x}", ms)
