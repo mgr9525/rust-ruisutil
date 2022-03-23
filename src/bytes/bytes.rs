@@ -24,7 +24,7 @@ impl ByteBox {
     pub fn new(dt: Arc<Box<[u8]>>, start: usize, end: usize) -> Self {
         Self {
             start: start,
-            end: end,
+            end: if end > 0 { end } else { dt.len() },
             data: dt,
         }
     }
@@ -122,6 +122,15 @@ impl ByteBoxBuf {
         if data.len() > 0 {
             self.count += data.len();
             self.list.push_back(data);
+        }
+    }
+    pub fn push_all(&mut self, data: &mut Self) {
+        loop {
+            if let Some(v) = data.pull() {
+                self.push(v);
+            } else {
+                break;
+            }
         }
     }
     pub fn pushs(&mut self, dt: Arc<Box<[u8]>>, start: usize, end: usize) {
