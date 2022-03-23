@@ -82,6 +82,12 @@ impl ByteBox {
         }
     }
 }
+impl From<Box<[u8]>> for ByteBox {
+    fn from(v: Box<[u8]>) -> Self {
+        let ln = v.len();
+        Self::new(Arc::new(v), 0, ln)
+    }
+}
 impl From<Arc<Box<[u8]>>> for ByteBox {
     fn from(v: Arc<Box<[u8]>>) -> Self {
         let ln = v.len();
