@@ -82,6 +82,12 @@ impl ByteBox {
         }
     }
 }
+impl From<Vec<u8>> for ByteBox {
+    fn from(v: Vec<u8>) -> Self {
+        let ln = v.len();
+        Self::new(Arc::new(v.into_boxed_slice()), 0, ln)
+    }
+}
 impl From<Box<[u8]>> for ByteBox {
     fn from(v: Box<[u8]>) -> Self {
         let ln = v.len();
