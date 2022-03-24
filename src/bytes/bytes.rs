@@ -124,13 +124,9 @@ impl ByteBoxBuf {
             self.list.push_back(data);
         }
     }
-    pub fn push_all(&mut self, data: &mut Self) {
-        loop {
-            if let Some(v) = data.pull() {
-                self.push(v);
-            } else {
-                break;
-            }
+    pub fn push_all(&mut self, data: &Self) {
+        for v in data.iter() {
+            self.push(v.clone());
         }
     }
     pub fn pushs(&mut self, dt: Arc<Box<[u8]>>, start: usize, end: usize) {
