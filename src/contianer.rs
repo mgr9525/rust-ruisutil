@@ -43,9 +43,13 @@ impl<T> ArcMut<T> {
     pub fn ptr(&self) -> u64 {
         self.ptrs
     }
+
+    pub fn arc_count(&self) -> usize {
+        Arc::strong_count(&self.inner)
+    }
 }
 
-/* 
+/*
 pub struct ArcMutBox<T> {
   ptrs: u64,
   inner: Arc<Box<T>>,
