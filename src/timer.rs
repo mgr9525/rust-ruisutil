@@ -26,6 +26,9 @@ impl Timer {
     pub fn reset(&self) {
         unsafe { self.inner.muts().tms = SystemTime::now() };
     }
+    pub fn reinit(&self){
+      unsafe { self.inner.muts().tms = SystemTime::UNIX_EPOCH };
+    }
     pub fn tick(&self) -> bool {
         if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
             if tm >= self.inner.dur {
