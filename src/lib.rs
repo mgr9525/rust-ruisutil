@@ -10,7 +10,10 @@ use std::{
     io::{self, Read, Write},
     net,
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::{self, Duration, SystemTime},
 };
 
@@ -251,30 +254,35 @@ pub struct Context {
 }
 struct CtxInner {
     parent: Option<Context>,
-    doned: Mutex<bool>,
+    doned: AtomicBool,
 
     times: time::SystemTime,
-    timeout: Mutex<Option<time::Duration>>,
+    timeout: Option<time::Duration>,
 }
 
+impl CtxInner {
+    fn new(prt: Option<Context>) -> Self {
+        Self {
+            parent: prt,
+            doned: AtomicBool::new(false),
+            times: time::SystemTime::now(),
+            timeout: None,
+        }
+    }
+}
 impl Context {
     pub fn background(prt: Option<Context>) -> Self {
         Self {
-            inner: Arc::new(CtxInner {
-                parent: prt,
-                doned: Mutex::new(false),
-                times: time::SystemTime::now(),
-                timeout: Mutex::new(None),
-            }),
+            inner: Arc::new(CtxInner::new(prt)),
         }
     }
 
     pub fn with_timeout(prt: Option<Context>, tmd: time::Duration) -> Self {
-        let c = Self::background(prt);
-        if let Ok(mut v) = c.inner.timeout.lock() {
-            *v = Some(tmd)
+        let mut inr = CtxInner::new(prt);
+        inr.timeout = Some(tmd);
+        Self {
+            inner: Arc::new(inr),
         }
-        c
     }
 
     pub fn done(&self) -> bool {
@@ -283,24 +291,19 @@ impl Context {
                 return true;
             }
         };
-        if let Some(v) = &*self.inner.timeout.lock().unwrap() {
+        if let Some(v) = &self.inner.timeout {
             if let Ok(vs) = time::SystemTime::now().duration_since(self.inner.times) {
                 if vs.gt(v) {
                     return true;
                 }
             }
         }
-        *self.inner.doned.lock().unwrap()
+        self.inner.doned.load(Ordering::SeqCst)
     }
 
     pub fn stop(&self) -> bool {
-        match self.inner.doned.lock() {
-            Err(_) => false,
-            Ok(mut v) => {
-                *v = true;
-                true
-            }
-        }
+        self.inner.doned.store(true, Ordering::SeqCst);
+        true
     }
 }
 
@@ -466,33 +469,32 @@ mod tests {
 
     #[test]
     fn wgs() {
-      task::block_on(async move{
-        let wg=crate::WaitGroup::new();
-        let wgc=wg.clone();
-        task::spawn(async move{
-          let mut n=0;
-          while n<30*100*2{
-            n+=1;
-            task::sleep(Duration::from_millis(5)).await;
-          }
-          println!("task end1!!!!");
-          std::mem::drop(wgc);
+        task::block_on(async move {
+            let wg = crate::WaitGroup::new();
+            let wgc = wg.clone();
+            task::spawn(async move {
+                let mut n = 0;
+                while n < 30 * 100 * 2 {
+                    n += 1;
+                    task::sleep(Duration::from_millis(5)).await;
+                }
+                println!("task end1!!!!");
+                std::mem::drop(wgc);
+            });
+            let wgc = wg.clone();
+            task::spawn(async move {
+                let mut n = 0;
+                while n < 40 * 100 * 2 {
+                    n += 1;
+                    task::sleep(Duration::from_millis(5)).await;
+                }
+                println!("task end2!!!!");
+                std::mem::drop(wgc);
+            });
+            println!("start waits!!!!");
+            wg.waits().await;
+            // task::sleep(Duration::from_secs(40)).await;
+            println!("the end!!!!");
         });
-        let wgc=wg.clone();
-        task::spawn(async move{
-          let mut n=0;
-          while n<40*100*2{
-            n+=1;
-            task::sleep(Duration::from_millis(5)).await;
-          }
-          println!("task end2!!!!");
-          std::mem::drop(wgc);
-        });
-        println!("start waits!!!!");
-        wg.waits().await;
-        // task::sleep(Duration::from_secs(40)).await;
-        println!("the end!!!!");
-      });
     }
-
 }
