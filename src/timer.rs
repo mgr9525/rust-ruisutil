@@ -18,16 +18,16 @@ impl Timer {
     pub fn new(dur: Duration) -> Self {
         Self {
             inner: ArcMut::new(Inner {
-              dur: dur,
-              tms: SystemTime::UNIX_EPOCH,
-          }),
+                dur: dur,
+                tms: SystemTime::UNIX_EPOCH,
+            }),
         }
     }
     pub fn reset(&self) {
         unsafe { self.inner.muts().tms = SystemTime::now() };
     }
-    pub fn reinit(&self){
-      unsafe { self.inner.muts().tms = SystemTime::UNIX_EPOCH };
+    pub fn reinit(&self) {
+        unsafe { self.inner.muts().tms = SystemTime::UNIX_EPOCH };
     }
     pub fn tick(&self) -> bool {
         if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
@@ -39,12 +39,20 @@ impl Timer {
         false
     }
 
-    pub fn tmout(&self)->bool{
-      if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
-          if tm >= self.inner.dur {
-              return true;
-          }
-      }
-      false
+    pub fn tmout(&self) -> bool {
+        if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
+            if tm >= self.inner.dur {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn tmdur(&self) -> Duration {
+        if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
+            tm
+        } else {
+            Duration::ZERO
+        }
     }
 }

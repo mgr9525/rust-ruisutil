@@ -118,10 +118,11 @@ impl ByteBoxBuf {
             self.list.push_front(data);
         }
     }
-    pub fn push(&mut self, data: ByteBox) {
-        if data.len() > 0 {
-            self.count += data.len();
-            self.list.push_back(data);
+    pub fn push<T: Into<ByteBox>>(&mut self, data: T) {
+        let dt = data.into();
+        if dt.len() > 0 {
+            self.count += dt.len();
+            self.list.push_back(dt);
         }
     }
     pub fn push_all(&mut self, data: &Self) {
