@@ -160,6 +160,13 @@ impl ByteBoxBuf {
             }
         }
     }
+    pub fn pull_all(&mut self) -> Self {
+        let mut rts = Self::new();
+        while let Some(v) = self.pull() {
+            rts.push(v);
+        }
+        rts
+    }
     pub fn clear(&mut self) {
         self.list.clear();
     }
