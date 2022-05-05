@@ -42,6 +42,20 @@ impl ByteBox {
             Ok(rt)
         }
     }
+    pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
+        let posd = pos + self.start;
+        if posd < self.start || posd >= self.end {
+            Err(ioerr("pos err", None))
+        } else {
+            let rt = Self {
+                start: self.start,
+                end: posd,
+                data: self.data.clone(),
+            };
+            self.start = posd;
+            Ok(rt)
+        }
+    }
     /* pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
         if posd < self.start || posd >= self.end {
