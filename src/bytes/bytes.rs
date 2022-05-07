@@ -30,7 +30,7 @@ impl ByteBox {
     }
     pub fn cut(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd < self.start || posd >= self.end {
+        if posd <= self.start || posd >= self.end {
             Err(ioerr("pos err", None))
         } else {
             let rt = Self {
@@ -44,7 +44,7 @@ impl ByteBox {
     }
     pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd < self.start || posd >= self.end {
+        if posd <= self.start || posd >= self.end {
             Err(ioerr("pos err", None))
         } else {
             let rt = Self {
@@ -95,6 +95,13 @@ impl ByteBox {
             })
         }
     }
+
+    /* pub fn bytes(&mut self) -> Box<[u8]> {
+        let tmp = Vec::new().into_boxed_slice();
+        let bts = std::mem::replace(&mut self.data, Arc::new(tmp));
+        let t=Arc::downgrade(&bts);
+        *t
+    } */
 }
 impl From<Vec<u8>> for ByteBox {
     fn from(v: Vec<u8>) -> Self {
@@ -264,7 +271,7 @@ impl ByteBoxBuf {
 
         Ok(frt)
     }
-    pub fn to_bytes(&self) -> Box<[u8]> {
+    /* pub fn to_bytes(&self) -> Box<[u8]> {
         let mut rtbts: Vec<u8> = Vec::with_capacity(self.count);
         let mut itr = self.list.iter();
         while let Some(v) = itr.next() {
@@ -274,6 +281,17 @@ impl ByteBoxBuf {
             }
         }
         rtbts.into_boxed_slice()
+    } */
+    pub fn to_bytes(&self) -> Box<[u8]> {
+        let mut pos = 0usize;
+        let mut rtbts = vec![0u8; self.count].into_boxed_slice();
+        let mut itr = self.list.iter();
+        while let Some(v) = itr.next() {
+            let end = pos + v.len();
+            (&mut rtbts[pos..end]).copy_from_slice(&v[..]);
+            pos = end;
+        }
+        rtbts
     }
 }
 
