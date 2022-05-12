@@ -44,8 +44,14 @@ impl ByteBox {
     }
     pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd <= self.start || posd >= self.end {
+        if posd <= self.start || posd > self.end {
             Err(ioerr("pos err", None))
+        /* }else if posd == self.end {
+        let rt = Self {
+            start: self.start,
+            end: posd,
+            data: self.data.clone(),
+        }; */
         } else {
             let rt = Self {
                 start: self.start,

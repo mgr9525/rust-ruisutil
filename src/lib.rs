@@ -67,18 +67,18 @@ where
 pub fn struct2byte<T: Sized>(p: &T) -> &[u8] {
     unsafe { std::slice::from_raw_parts((p as *const T) as *const u8, std::mem::size_of::<T>()) }
 }
-pub fn byte2struct<T: Sized>(p: &mut T, bts: &[u8]) -> io::Result<()> {
+pub fn byte2struct<T: Sized>(p: &mut T, bts: &[u8]) -> io::Result<usize> {
     let ln = std::mem::size_of::<T>();
-    if ln != bts.len() {
+    if ln > bts.len() {
         return Err(ioerr("param err!", None));
     }
 
     unsafe {
         let ptr = p as *mut T as *mut u8;
-        let tb = bts.as_ptr();
+        let tb = (&bts[..ln]).as_ptr();
         std::ptr::copy_nonoverlapping(tb, ptr, ln);
     };
-    Ok(())
+    Ok(ln)
 }
 
 pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Box<[u8]>> {
@@ -186,6 +186,12 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
+pub fn env(key: &str) -> Option<String> {
+    match std::env::var(key) {
+        Err(_) => None,
+        Ok(v) => Some(v),
+    }
+}
 pub fn envs(key: &str, defs: &str) -> String {
     match std::env::var(key) {
         Err(_) => String::from(defs),
@@ -199,6 +205,15 @@ pub fn envs(key: &str, defs: &str) -> String {
     }
 }
 
+pub fn print_hex(data: &[u8]) {
+    if data.len() <= 0 {
+        return;
+    }
+    print!("{:x}", data[0]);
+    for i in 1..data.len() {
+        print!(" {:x}", data[i]);
+    }
+}
 pub fn md5str<S: Into<String>>(input: S) -> String {
     let ms = md5::compute(input.into().as_bytes());
     format!("{:x}", ms)
