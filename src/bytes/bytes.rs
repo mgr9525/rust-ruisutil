@@ -299,6 +299,9 @@ impl ByteBoxBuf {
         }
         rtbts
     }
+    pub fn to_byte_box(&self) -> ByteBox {
+        ByteBox::from(self.to_bytes())
+    }
 }
 
 impl Read for ByteBoxBuf {
