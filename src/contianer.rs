@@ -19,7 +19,7 @@ impl<T> Deref for ArcMut<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        &*self.inner
+        &self.inner
     }
 }
 impl<T> DerefMut for ArcMut<T> {
