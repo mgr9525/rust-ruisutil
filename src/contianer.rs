@@ -19,7 +19,7 @@ impl<T> Deref for ArcMut<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        &self.inner
+        &*self.inner
     }
 }
 impl<T> DerefMut for ArcMut<T> {
@@ -32,10 +32,11 @@ impl<T> DerefMut for ArcMut<T> {
 impl<T> ArcMut<T> {
     pub fn new(t: T) -> Self {
         let inr = Arc::new(t);
-        Self {
+        Self::from(inr)
+        /* Self {
             ptrs: (&*inr) as *const T as u64,
             inner: inr,
-        }
+        } */
     }
     pub unsafe fn muts<'a>(&'a self) -> &'a mut T {
         &mut *(self.ptrs as *mut T)
@@ -46,6 +47,22 @@ impl<T> ArcMut<T> {
 
     pub fn arc_count(&self) -> usize {
         Arc::strong_count(&self.inner)
+    }
+    pub fn into_raw(&self) -> *const T {
+        Arc::into_raw(self.inner.clone())
+    }
+    pub unsafe fn from_raw(p: *const T) -> Self {
+        let inr = Arc::from_raw(p);
+        Self::from(inr)
+    }
+}
+
+impl<T> From<Arc<T>> for ArcMut<T> {
+    fn from(inr: Arc<T>) -> Self {
+        Self {
+            ptrs: (&*inr) as *const T as u64,
+            inner: inr,
+        }
     }
 }
 
