@@ -22,6 +22,7 @@ pub use contianer::ArcMut;
 pub use timer::Timer;
 
 pub mod bytes;
+pub mod sync;
 mod contianer;
 pub mod message;
 mod timer;
