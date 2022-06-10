@@ -20,9 +20,10 @@ mod tests {
         let wkr=crate::sync::Waker::new();
         let wkrc=wkr.clone();
         async_std::task::spawn(async move{
-          async_std::task::sleep(Duration::from_secs(5)).await;
-          // wkrc.notify_one().await;
+          async_std::task::sleep(Duration::from_secs(3)).await;
           wkrc.notify_all().await;
+          async_std::task::sleep(Duration::from_secs(5)).await;
+          wkrc.notify_one().await;
         });
 
         let now=SystemTime::now();
@@ -32,6 +33,15 @@ mod tests {
           println!("end wait:{}ms",v.as_millis());
         }else{
           println!("end wait");
+        }
+        
+        let now=SystemTime::now();
+        println!("start wait2");
+        wkr.wait().await;
+        if let Ok(v)=SystemTime::now().duration_since(now){
+          println!("end wait2:{}ms",v.as_millis());
+        }else{
+          println!("end wait2");
         }
       });
   }
