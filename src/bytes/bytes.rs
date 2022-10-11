@@ -31,7 +31,7 @@ impl ByteBox {
     pub fn cut(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
         if posd <= self.start || posd >= self.end {
-            Err(ioerr("pos err", None))
+            Err(ioerr("ByteBox.cut pos err", None))
         } else {
             let rt = Self {
                 start: posd,
@@ -45,7 +45,7 @@ impl ByteBox {
     pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
         if posd <= self.start || posd > self.end {
-            Err(ioerr("pos err", None))
+            Err(ioerr("ByteBox.cuts pos err", None))
         /* }else if posd == self.end {
         let rt = Self {
             start: self.start,
@@ -211,6 +211,21 @@ impl ByteBoxBuf {
         }
         rts
     }
+    pub fn get_byte(&self, idx: usize) -> io::Result<u8> {
+        if idx >= self.len() {
+            return Err(ioerr("idx err:more count", None));
+        }
+        let mut lns = 0usize;
+        let mut itr = self.list.iter();
+        while let Some(v) = itr.next() {
+            let idxs = idx - lns;
+            if idxs < v.len() {
+                return Ok(v[idxs]);
+            }
+            lns += v.len();
+        }
+        Err(ioerr("not found index byte", None))
+    }
     pub fn gets(&self, start: usize, len: usize) -> io::Result<(Box<[u8]>, usize)> {
         if len <= 0 {
             return Err(ioerr("len err", None));
@@ -255,10 +270,10 @@ impl ByteBoxBuf {
     }
     pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
         if pos <= 0 {
-            return Err(ioerr("pos err", None));
+            return Err(ioerr("cut_front pos err", None));
         }
         if pos >= self.count {
-            return Err(ioerr("pos out limit", None));
+            return Err(ioerr("cut_front pos out limit", None));
         }
         let mut frt = Self::new();
         let mut pos_real = pos;
