@@ -30,17 +30,14 @@ impl WakerFut {
             }),
         }
     }
-    async fn close(&self) {
+    pub fn close(&self) {
         if self.inner.closed.load(Ordering::SeqCst) {
             return;
         }
         self.inner.closed.store(true, Ordering::SeqCst);
+        self.notify_all();
     }
     pub fn notify_one(&self) {
-        if self.inner.closed.load(Ordering::SeqCst) {
-            return;
-        }
-
         let lkv = match self.inner.ticks.lock() {
             Ok(v) => v,
             Err(_) => return,
@@ -51,10 +48,6 @@ impl WakerFut {
         }
     }
     pub fn notify_all(&self) {
-        if self.inner.closed.load(Ordering::SeqCst) {
-            return;
-        }
-
         let lkv = match self.inner.ticks.lock() {
             Ok(v) => v,
             Err(_) => return,

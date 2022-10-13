@@ -44,7 +44,7 @@ mod tests {
         });
     }
     #[test]
-    fn wakerFut() {
+    fn waker_fut() {
         async_std::task::block_on(async move {
             let wkr = crate::sync::WakerFut::new();
             let wkrc = wkr.clone();
@@ -53,6 +53,8 @@ mod tests {
                 wkrc.notify_all();
                 async_std::task::sleep(Duration::from_secs(5)).await;
                 wkrc.notify_one();
+                async_std::task::sleep(Duration::from_secs(5)).await;
+                wkrc.close();
             });
 
             let now = SystemTime::now();
@@ -77,11 +79,20 @@ mod tests {
 
             let now = SystemTime::now();
             println!("start wait2");
-            wkr.await;
+            wkr.clone().await;
             if let Ok(v) = SystemTime::now().duration_since(now) {
                 println!("end wait2:{}ms", v.as_millis());
             } else {
                 println!("end wait2");
+            }
+
+            let now = SystemTime::now();
+            println!("start wait3");
+            wkr.await;
+            if let Ok(v) = SystemTime::now().duration_since(now) {
+                println!("end wait3:{}ms", v.as_millis());
+            } else {
+                println!("end wait3");
             }
         });
     }
