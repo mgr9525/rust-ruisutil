@@ -61,7 +61,7 @@ mod tests {
             let wkrc = wkr.clone();
             async_std::task::spawn(async move {
                 println!("start wait1");
-                wkrc.await;
+                async_std::io::timeout(Duration::from_secs(2), wkrc).await;
                 if let Ok(v) = SystemTime::now().duration_since(now) {
                     println!("end wait1:{}ms", v.as_millis());
                 } else {

@@ -8,6 +8,7 @@ use std::{
 
 #[derive(Clone)]
 pub struct WakerFut {
+    wk: Option<std::task::Waker>,
     inner: crate::ArcMut<Inner>,
 }
 
@@ -24,6 +25,7 @@ impl WakerFut {
     pub fn new() -> Self {
         // let (sx, rx) = channel::unbounded::<()>();
         Self {
+            wk: None,
             inner: crate::ArcMut::new(Inner {
                 closed: AtomicBool::new(false),
                 ticks: Mutex::new(Vec::new()),
@@ -72,12 +74,16 @@ impl WakerFut {
 }
 
 impl Future for WakerFut {
-    type Output = ();
+    type Output = std::io::Result<()>;
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        let mut lkv = match self.inner.ticks.lock() {
+        let this = self.get_mut();
+        if let None = this.wk {
+            this.wk = Some(cx.waker().clone());
+        }
+        let mut lkv = match this.inner.ticks.lock() {
             Ok(v) => v,
             Err(_) => return std::task::Poll::Pending,
         };
@@ -85,9 +91,9 @@ impl Future for WakerFut {
         let mut i = 0;
         for v in &*lkv {
             if v.wk.will_wake(cx.waker()) {
-                if self.checks(v) {
+                if this.checks(v) {
                     lkv.remove(i);
-                    return std::task::Poll::Ready(());
+                    return std::task::Poll::Ready(Ok(()));
                 }
                 return std::task::Poll::Pending;
             }
@@ -100,5 +106,23 @@ impl Future for WakerFut {
         });
 
         std::task::Poll::Pending
+    }
+}
+
+impl Drop for WakerFut {
+    fn drop(&mut self) {
+        if let Some(wk) = &self.wk {
+            if let Ok(mut lkv) = self.inner.ticks.lock() {
+                let mut i = 0;
+                for v in &*lkv {
+                    if v.wk.will_wake(wk) {
+                        println!("WakerFut drop rm weker:{}", i);
+                        lkv.remove(i);
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+        }
     }
 }
