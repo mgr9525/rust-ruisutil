@@ -116,7 +116,7 @@ impl Drop for WakerFut {
                 let mut i = 0;
                 for v in &*lkv {
                     if v.wk.will_wake(wk) {
-                        println!("WakerFut drop rm weker:{}", i);
+                        // println!("WakerFut drop rm weker:{}", i);
                         lkv.remove(i);
                         break;
                     }
