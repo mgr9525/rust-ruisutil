@@ -9,10 +9,9 @@ use std::{
     error,
     io::{self, Read, Write},
     net,
-    str::FromStr,
     sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        atomic::{AtomicBool, AtomicI32, Ordering},
+        Arc,
     },
     time::{self, Duration, SystemTime},
 };
@@ -22,9 +21,9 @@ pub use contianer::ArcMut;
 pub use timer::Timer;
 
 pub mod bytes;
-pub mod sync;
 mod contianer;
 pub mod message;
+pub mod sync;
 mod timer;
 
 pub fn byte_2i(bts: &[u8]) -> i64 {
@@ -329,21 +328,21 @@ pub struct WaitGroup {
 
 /// Inner state of a `WaitGroup`.
 struct WgInner {
-    count: Mutex<usize>,
+    count: AtomicI32,
 }
 impl WaitGroup {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(WgInner {
-                count: Mutex::new(1),
+                count: AtomicI32::new(0),
             }),
         }
     }
     pub fn wait(&self) {
         loop {
             std::thread::sleep(Duration::from_millis(100));
-            let count = self.inner.count.lock().unwrap();
-            if *count <= 1 {
+            let count = self.inner.count.load(Ordering::SeqCst);
+            if count <= 0 {
                 break;
             }
         }
@@ -351,8 +350,8 @@ impl WaitGroup {
     pub async fn waits(&self) {
         loop {
             async_std::task::sleep(Duration::from_millis(100)).await;
-            let count = self.inner.count.lock().unwrap();
-            if *count <= 1 {
+            let count = self.inner.count.load(Ordering::SeqCst);
+            if count <= 0 {
                 break;
             }
         }
@@ -360,18 +359,13 @@ impl WaitGroup {
 }
 impl Drop for WaitGroup {
     fn drop(&mut self) {
-        if let Ok(mut v) = self.inner.count.lock() {
-            *v -= 1;
-        }
+        self.inner.count.fetch_add(-1, Ordering::SeqCst);
     }
 }
 
 impl Clone for WaitGroup {
     fn clone(&self) -> WaitGroup {
-        if let Ok(mut v) = self.inner.count.lock() {
-            *v += 1;
-        }
-
+        self.inner.count.fetch_add(1, Ordering::SeqCst);
         WaitGroup {
             inner: self.inner.clone(),
         }
