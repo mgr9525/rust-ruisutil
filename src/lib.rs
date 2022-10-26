@@ -341,8 +341,7 @@ impl WaitGroup {
     pub fn wait(&self) {
         loop {
             std::thread::sleep(Duration::from_millis(100));
-            let count = self.inner.count.load(Ordering::SeqCst);
-            if count <= 0 {
+            if self.done(){
                 break;
             }
         }
@@ -350,10 +349,17 @@ impl WaitGroup {
     pub async fn waits(&self) {
         loop {
             async_std::task::sleep(Duration::from_millis(100)).await;
-            let count = self.inner.count.load(Ordering::SeqCst);
-            if count <= 0 {
+            if self.done(){
                 break;
             }
+        }
+    }
+    pub fn done(&self)->bool{
+        let count = self.inner.count.load(Ordering::SeqCst);
+        if count <= 0 {
+            true
+        }else{
+            false
         }
     }
 }
