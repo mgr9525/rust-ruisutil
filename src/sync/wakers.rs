@@ -6,7 +6,6 @@ use std::{
     },
 };
 
-#[derive(Clone)]
 pub struct WakerFut {
     wk: Option<std::task::Waker>,
     inner: crate::ArcMut<Inner>,
@@ -21,6 +20,14 @@ struct Item {
     wk: std::task::Waker,
 }
 
+impl Clone for WakerFut {
+    fn clone(&self) -> Self {
+        Self {
+            wk: None,
+            inner: self.inner.clone(),
+        }
+    }
+}
 impl WakerFut {
     pub fn new() -> Self {
         // let (sx, rx) = channel::unbounded::<()>();
@@ -62,8 +69,11 @@ impl WakerFut {
     /* fn checks(&self, cx: &mut std::task::Context<'_>) -> impl Future<Output = i32> {
         async {123}.boxed()
     } */
+    fn is_close(&self) -> bool {
+        self.inner.closed.load(Ordering::SeqCst)
+    }
     fn checks(&self, it: &Item) -> bool {
-        if self.inner.closed.load(Ordering::SeqCst) {
+        if self.is_close() {
             return true;
         }
         if it.ticked.load(Ordering::SeqCst) {
@@ -82,6 +92,9 @@ impl Future for WakerFut {
         let this = self.get_mut();
         if let None = this.wk {
             this.wk = Some(cx.waker().clone());
+        }
+        if this.is_close() {
+            return std::task::Poll::Ready(Ok(()));
         }
         let mut lkv = match this.inner.ticks.lock() {
             Ok(v) => v,

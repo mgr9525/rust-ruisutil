@@ -2,7 +2,10 @@ use std::{
     collections::{linked_list, LinkedList},
     io::{self, Read, Write},
     ops::Deref,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -384,23 +387,32 @@ impl ByteSteamBuf {
         }
     }
     pub fn close(&self) {
+        self.ctx.stop();
         self.wkr1.close();
         self.wkr2.close();
     }
-    pub async fn push<T: Into<ByteBox>>(&self, data: T) {
+    pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
         if self.max > 0 {
-            while !self.ctx.done() {
+            loop {
+                if self.ctx.done() {
+                    return Err(crate::ioerr(
+                        "close chan!!!",
+                        Some(io::ErrorKind::BrokenPipe),
+                    ));
+                }
                 let lkv = self.buf.read().await;
-                if lkv.len() < self.max {
+                if lkv.len() <= self.max {
                     break;
                 }
                 std::mem::drop(lkv);
                 async_std::io::timeout(self.tmout.clone(), self.wkr1.clone()).await;
+                // self.wkr1.notify_all();
             }
         }
         let mut lkv = self.buf.write().await;
         lkv.push(data);
         self.wkr2.notify_all();
+        Ok(())
     }
     pub async fn pull(&self) -> Option<ByteBox> {
         while !self.ctx.done() {
@@ -410,15 +422,16 @@ impl ByteSteamBuf {
             }
             std::mem::drop(lkv);
             async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+            // self.wkr2.notify_all();
         }
         let mut lkv = self.buf.write().await;
         let rts = lkv.pull();
         self.wkr1.notify_all();
         rts
     }
-    pub fn notify_all(&self){
-      self.wkr1.notify_all();
-      self.wkr2.notify_all();
+    pub fn notify_all(&self) {
+        self.wkr1.notify_all();
+        self.wkr2.notify_all();
     }
     /* pub async fn clear(&self) {
         let mut lkv = self.buf.write().await;
