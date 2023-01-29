@@ -3,9 +3,12 @@ use std::{
     io::{self, Read, Write},
     ops::Deref,
     sync::Arc,
+    time::Duration,
 };
 
-use crate::ioerr;
+use async_std::sync::RwLock;
+
+use crate::{ioerr, sync::WakerFut};
 
 #[derive(Clone)]
 pub struct ByteBox {
@@ -161,7 +164,7 @@ impl ByteBoxBuf {
         let data = ByteBox::new(dt, start, end);
         self.push(data);
     }
-    pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
+    /* pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
         let ln = dt.len();
         if ln > 0 {
             self.pushs(dt, start, ln);
@@ -177,7 +180,7 @@ impl ByteBoxBuf {
         }
 
         ln
-    }
+    } */
     pub fn pull(&mut self) -> Option<ByteBox> {
         match self.list.pop_front() {
             None => None,
@@ -350,12 +353,80 @@ impl Write for ByteBoxBuf {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let mut bts = vec![0u8; buf.len()].into_boxed_slice();
         bts.copy_from_slice(buf);
-        self.push_start(Arc::new(bts), 0);
+        self.push(Arc::new(bts));
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
         // self.clear();
         Ok(())
+    }
+}
+
+pub struct ByteSteamBuf {
+    ctx: crate::Context,
+    buf: RwLock<ByteBoxBuf>,
+    max: usize,
+    tmout: Duration,
+    wkr1: WakerFut,
+    wkr2: WakerFut,
+}
+
+impl ByteSteamBuf {
+    pub fn new(ctx: &crate::Context, max: usize, tmout: Duration) -> Self {
+        Self {
+            ctx: crate::Context::background(Some(ctx.clone())),
+            buf: RwLock::new(ByteBoxBuf::new()),
+            max: max,
+            tmout: tmout,
+            wkr1: WakerFut::new(),
+            wkr2: WakerFut::new(),
+        }
+    }
+    pub fn close(&self) {
+        self.wkr1.close();
+        self.wkr2.close();
+    }
+    pub async fn push<T: Into<ByteBox>>(&self, data: T) {
+        if self.max > 0 {
+            while !self.ctx.done() {
+                let lkv = self.buf.read().await;
+                if lkv.len() < self.max {
+                    break;
+                }
+                std::mem::drop(lkv);
+                async_std::io::timeout(self.tmout.clone(), self.wkr1.clone()).await;
+            }
+        }
+        let mut lkv = self.buf.write().await;
+        lkv.push(data);
+        self.wkr2.notify_all();
+    }
+    pub async fn pull(&self) -> Option<ByteBox> {
+        while !self.ctx.done() {
+            let lkv = self.buf.read().await;
+            if lkv.len() > 0 {
+                break;
+            }
+            std::mem::drop(lkv);
+            async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+        }
+        let mut lkv = self.buf.write().await;
+        let rts = lkv.pull();
+        self.wkr1.notify_all();
+        rts
+    }
+    pub fn notify_all(&self){
+      self.wkr1.notify_all();
+      self.wkr2.notify_all();
+    }
+    /* pub async fn clear(&self) {
+        let mut lkv = self.buf.write().await;
+        lkv.clear();
+        self.wkr1.notify_one();
+    } */
+    pub async fn len(&self) -> usize {
+        let lkv = self.buf.read().await;
+        lkv.len()
     }
 }
