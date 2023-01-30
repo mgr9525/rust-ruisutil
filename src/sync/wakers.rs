@@ -90,9 +90,6 @@ impl Future for WakerFut {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = self.get_mut();
-        if let None = this.wk {
-            this.wk = Some(cx.waker().clone());
-        }
         if this.is_close() {
             return std::task::Poll::Ready(Ok(()));
         }
@@ -100,6 +97,22 @@ impl Future for WakerFut {
             Ok(v) => v,
             Err(_) => return std::task::Poll::Pending,
         };
+        match &this.wk {
+            None => this.wk = Some(cx.waker().clone()),
+            Some(vs) => {
+                if !vs.will_wake(cx.waker()) {
+                    let mut i = 0;
+                    for v in &*lkv {
+                        if v.wk.will_wake(vs) {
+                            lkv.remove(i);
+                            break;
+                        }
+                        i += 1;
+                    }
+                    this.wk = Some(cx.waker().clone());
+                }
+            }
+        }
 
         let mut i = 0;
         for v in &*lkv {
