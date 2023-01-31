@@ -391,6 +391,12 @@ impl ByteSteamBuf {
         self.wkr1.close();
         self.wkr2.close();
     }
+    pub async fn push_all(&mut self, data: &ByteBoxBuf) -> io::Result<()> {
+        for v in data.iter() {
+            self.push(v.clone()).await?;
+        }
+        Ok(())
+    }
     pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
         if self.max > 0 {
             loop {
