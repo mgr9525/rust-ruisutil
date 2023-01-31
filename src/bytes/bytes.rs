@@ -391,7 +391,7 @@ impl ByteSteamBuf {
         self.wkr1.close();
         self.wkr2.close();
     }
-    pub async fn push_all(&mut self, data: &ByteBoxBuf) -> io::Result<()> {
+    pub async fn push_all(&self, data: &ByteBoxBuf) -> io::Result<()> {
         for v in data.iter() {
             self.push(v.clone()).await?;
         }
