@@ -36,7 +36,7 @@ impl ByteBox {
     }
     pub fn cut(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd <= self.start || posd >= self.end {
+        if posd < self.start || posd > self.end {
             Err(ioerr(
                 format!(
                     "ByteBox.cut pos err:posd={},s={},e={}",
@@ -56,8 +56,11 @@ impl ByteBox {
     }
     pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd <= self.start || posd > self.end {
-            Err(ioerr("ByteBox.cuts pos err", None))
+        if posd < self.start || posd > self.end {
+            Err(ioerr(format!(
+                "ByteBox.cuts pos err:posd={},s={},e={}",
+                posd, self.start, self.end
+            ), None))
         /* }else if posd == self.end {
         let rt = Self {
             start: self.start,
@@ -281,13 +284,13 @@ impl ByteBoxBuf {
         Ok((rtbts.into_boxed_slice(), start + len))
     }
     pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
-        if pos <= 0 {
-            return Err(ioerr("cut_front pos err", None));
-        }
         if pos >= self.count {
             return Err(ioerr("cut_front pos out limit", None));
         }
         let mut frt = Self::new();
+        if pos <= 0 {
+            return Ok(frt);
+        }
         let mut pos_real = pos;
         while let Some(mut v) = self.pull() {
             let ln = v.len();
