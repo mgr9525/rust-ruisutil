@@ -57,10 +57,13 @@ impl ByteBox {
     pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
         if posd < self.start || posd > self.end {
-            Err(ioerr(format!(
-                "ByteBox.cuts pos err:posd={},s={},e={}",
-                posd, self.start, self.end
-            ), None))
+            Err(ioerr(
+                format!(
+                    "ByteBox.cuts pos err:posd={},s={},e={}",
+                    posd, self.start, self.end
+                ),
+                None,
+            ))
         /* }else if posd == self.end {
         let rt = Self {
             start: self.start,
@@ -295,9 +298,9 @@ impl ByteBoxBuf {
         while let Some(mut v) = self.pull() {
             let ln = v.len();
             if pos_real < ln {
-                let rgt = v.cut(pos_real)?;
-                frt.push(v);
-                self.push_front(rgt);
+                let rgt = v.cuts(pos_real)?;
+                frt.push(rgt);
+                self.push_front(v);
                 break;
             } else {
                 pos_real -= ln;
