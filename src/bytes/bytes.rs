@@ -3,7 +3,7 @@ use std::{
     io::{self, Read, Write},
     ops::Deref,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -287,7 +287,7 @@ impl ByteBoxBuf {
         Ok((rtbts.into_boxed_slice(), start + len))
     }
     pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
-        if pos >= self.count {
+        if pos > self.count {
             return Err(ioerr("cut_front pos out limit", None));
         }
         let mut frt = Self::new();
@@ -384,7 +384,7 @@ impl Write for ByteBoxBuf {
 pub struct ByteSteamBuf {
     ctx: crate::Context,
     buf: RwLock<ByteBoxBuf>,
-    max: usize,
+    max: AtomicUsize,
     tmout: Duration,
     wkr1: WakerFut,
     wkr2: WakerFut,
@@ -395,7 +395,7 @@ impl ByteSteamBuf {
         Self {
             ctx: crate::Context::background(Some(ctx.clone())),
             buf: RwLock::new(ByteBoxBuf::new()),
-            max: max,
+            max: AtomicUsize::new(max),
             tmout: tmout,
             wkr1: WakerFut::new(),
             wkr2: WakerFut::new(),
@@ -413,7 +413,8 @@ impl ByteSteamBuf {
         Ok(())
     }
     pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
-        if self.max > 0 {
+        let max = self.max.load(Ordering::SeqCst);
+        if max > 0 {
             loop {
                 if self.ctx.done() {
                     return Err(crate::ioerr(
@@ -422,7 +423,7 @@ impl ByteSteamBuf {
                     ));
                 }
                 let lkv = self.buf.read().await;
-                if lkv.len() <= self.max {
+                if lkv.len() <= max {
                     break;
                 }
                 std::mem::drop(lkv);
@@ -450,6 +451,38 @@ impl ByteSteamBuf {
         self.wkr1.notify_all();
         rts
     }
+    pub async fn pull_size(
+        &self,
+        ctx: Option<&crate::Context>,
+        sz: usize,
+    ) -> io::Result<ByteBoxBuf> {
+        self.more_max(sz).await;
+        loop {
+            if self.ctx.done() {
+                return Err(crate::ioerr(
+                    "close chan!!!",
+                    Some(io::ErrorKind::BrokenPipe),
+                ));
+            }
+            if let Some(v) = ctx {
+                if v.done() {
+                    return Err(crate::ioerr("ctx end!!!", Some(io::ErrorKind::BrokenPipe)));
+                }
+            }
+            let lkv = self.buf.read().await;
+            if lkv.len() >= sz {
+                break;
+            }
+            std::mem::drop(lkv);
+            async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+        }
+        let mut lkv = self.buf.write().await;
+        lkv.cut_front(sz)
+        /* match lkv.cut_front(sz) {
+            Err(e) => Err(e),
+            Ok(v) => Ok(v.to_bytes()),
+        } */
+    }
     pub fn notify_all(&self) {
         self.wkr1.notify_all();
         self.wkr2.notify_all();
@@ -462,5 +495,21 @@ impl ByteSteamBuf {
     pub async fn len(&self) -> usize {
         let lkv = self.buf.read().await;
         lkv.len()
+    }
+    pub fn set_max(&self, max: usize) {
+        self.max.store(max, Ordering::SeqCst);
+    }
+    pub fn set_maxs(&self, max: usize) {
+        let maxs = self.max.load(Ordering::SeqCst);
+        if max > maxs {
+            self.set_max(max);
+        }
+    }
+    pub async fn more_max(&self, adds: usize) {
+        let maxs = self.max.load(Ordering::SeqCst);
+        let sz = { self.buf.read().await.len() + adds };
+        if sz > maxs {
+            self.set_max(sz);
+        }
     }
 }
