@@ -157,10 +157,11 @@ impl ByteBoxBuf {
             list: LinkedList::new(),
         }
     }
-    fn push_front(&mut self, data: ByteBox) {
-        if data.len() > 0 {
-            self.count += data.len();
-            self.list.push_front(data);
+    pub fn push_front<T: Into<ByteBox>>(&mut self, data: T) {
+        let dt = data.into();
+        if dt.len() > 0 {
+            self.count += dt.len();
+            self.list.push_front(dt);
         }
     }
     pub fn push<T: Into<ByteBox>>(&mut self, data: T) {
