@@ -146,6 +146,7 @@ impl From<Arc<Box<[u8]>>> for ByteBox {
     }
 }
 
+#[derive(Clone)]
 pub struct ByteBoxBuf {
     count: usize,
     list: LinkedList<ByteBox>,
