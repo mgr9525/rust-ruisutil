@@ -2,10 +2,16 @@ use std::{
     collections::{linked_list, LinkedList},
     io::{self, Read, Write},
     ops::Deref,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
 };
 
-use crate::ioerr;
+use async_std::sync::RwLock;
+
+use crate::{ioerr, sync::WakerFut};
 
 #[derive(Clone)]
 pub struct ByteBox {
@@ -30,8 +36,14 @@ impl ByteBox {
     }
     pub fn cut(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd <= self.start || posd >= self.end {
-            Err(ioerr("ByteBox.cut pos err", None))
+        if posd < self.start || posd > self.end {
+            Err(ioerr(
+                format!(
+                    "ByteBox.cut pos err:posd={},s={},e={}",
+                    posd, self.start, self.end
+                ),
+                None,
+            ))
         } else {
             let rt = Self {
                 start: posd,
@@ -44,8 +56,14 @@ impl ByteBox {
     }
     pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
-        if posd <= self.start || posd > self.end {
-            Err(ioerr("ByteBox.cuts pos err", None))
+        if posd < self.start || posd > self.end {
+            Err(ioerr(
+                format!(
+                    "ByteBox.cuts pos err:posd={},s={},e={}",
+                    posd, self.start, self.end
+                ),
+                None,
+            ))
         /* }else if posd == self.end {
         let rt = Self {
             start: self.start,
@@ -128,6 +146,7 @@ impl From<Arc<Box<[u8]>>> for ByteBox {
     }
 }
 
+#[derive(Clone)]
 pub struct ByteBoxBuf {
     count: usize,
     list: LinkedList<ByteBox>,
@@ -139,10 +158,11 @@ impl ByteBoxBuf {
             list: LinkedList::new(),
         }
     }
-    fn push_front(&mut self, data: ByteBox) {
-        if data.len() > 0 {
-            self.count += data.len();
-            self.list.push_front(data);
+    pub fn push_front<T: Into<ByteBox>>(&mut self, data: T) {
+        let dt = data.into();
+        if dt.len() > 0 {
+            self.count += dt.len();
+            self.list.push_front(dt);
         }
     }
     pub fn push<T: Into<ByteBox>>(&mut self, data: T) {
@@ -161,7 +181,7 @@ impl ByteBoxBuf {
         let data = ByteBox::new(dt, start, end);
         self.push(data);
     }
-    pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
+    /* pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
         let ln = dt.len();
         if ln > 0 {
             self.pushs(dt, start, ln);
@@ -177,7 +197,7 @@ impl ByteBoxBuf {
         }
 
         ln
-    }
+    } */
     pub fn pull(&mut self) -> Option<ByteBox> {
         match self.list.pop_front() {
             None => None,
@@ -269,24 +289,27 @@ impl ByteBoxBuf {
         Ok((rtbts.into_boxed_slice(), start + len))
     }
     pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
-        if pos <= 0 {
-            return Err(ioerr("cut_front pos err", None));
-        }
-        if pos >= self.count {
+        if pos > self.count {
             return Err(ioerr("cut_front pos out limit", None));
         }
         let mut frt = Self::new();
+        if pos <= 0 {
+            return Ok(frt);
+        }
         let mut pos_real = pos;
         while let Some(mut v) = self.pull() {
             let ln = v.len();
             if pos_real < ln {
-                let rgt = v.cut(pos_real)?;
-                frt.push(v);
-                self.push_front(rgt);
+                let rgt = v.cuts(pos_real)?;
+                frt.push(rgt);
+                self.push_front(v);
                 break;
             } else {
                 pos_real -= ln;
                 frt.push(v);
+                if pos_real <= 0 {
+                    break;
+                }
             }
         }
 
@@ -350,12 +373,145 @@ impl Write for ByteBoxBuf {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let mut bts = vec![0u8; buf.len()].into_boxed_slice();
         bts.copy_from_slice(buf);
-        self.push_start(Arc::new(bts), 0);
+        self.push(Arc::new(bts));
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
         // self.clear();
         Ok(())
+    }
+}
+
+pub struct ByteSteamBuf {
+    ctx: crate::Context,
+    buf: RwLock<ByteBoxBuf>,
+    max: AtomicUsize,
+    tmout: Duration,
+    wkr1: WakerFut,
+    wkr2: WakerFut,
+}
+
+impl ByteSteamBuf {
+    pub fn new(ctx: &crate::Context, max: usize, tmout: Duration) -> Self {
+        Self {
+            ctx: crate::Context::background(Some(ctx.clone())),
+            buf: RwLock::new(ByteBoxBuf::new()),
+            max: AtomicUsize::new(max),
+            tmout: tmout,
+            wkr1: WakerFut::new(),
+            wkr2: WakerFut::new(),
+        }
+    }
+    pub fn close(&self) {
+        self.ctx.stop();
+        self.wkr1.close();
+        self.wkr2.close();
+    }
+    pub async fn push_all(&self, data: &ByteBoxBuf) -> io::Result<()> {
+        for v in data.iter() {
+            self.push(v.clone()).await?;
+        }
+        Ok(())
+    }
+    pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
+        let max = self.max.load(Ordering::SeqCst);
+        if max > 0 {
+            loop {
+                if self.ctx.done() {
+                    return Err(crate::ioerr(
+                        "close chan!!!",
+                        Some(io::ErrorKind::BrokenPipe),
+                    ));
+                }
+                let lkv = self.buf.read().await;
+                if lkv.len() <= max {
+                    break;
+                }
+                std::mem::drop(lkv);
+                async_std::io::timeout(self.tmout.clone(), self.wkr1.clone()).await;
+                // self.wkr1.notify_all();
+            }
+        }
+        let mut lkv = self.buf.write().await;
+        lkv.push(data);
+        self.wkr2.notify_all();
+        Ok(())
+    }
+    pub async fn pull(&self) -> Option<ByteBox> {
+        while !self.ctx.done() {
+            let lkv = self.buf.read().await;
+            if lkv.len() > 0 {
+                break;
+            }
+            std::mem::drop(lkv);
+            async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+            // self.wkr2.notify_all();
+        }
+        let mut lkv = self.buf.write().await;
+        let rts = lkv.pull();
+        self.wkr1.notify_all();
+        rts
+    }
+    pub async fn pull_size(
+        &self,
+        ctx: Option<&crate::Context>,
+        sz: usize,
+    ) -> io::Result<ByteBoxBuf> {
+        self.more_max(sz).await;
+        loop {
+            if self.ctx.done() {
+                return Err(crate::ioerr(
+                    "close chan!!!",
+                    Some(io::ErrorKind::BrokenPipe),
+                ));
+            }
+            if let Some(v) = ctx {
+                if v.done() {
+                    return Err(crate::ioerr("ctx end!!!", Some(io::ErrorKind::BrokenPipe)));
+                }
+            }
+            let lkv = self.buf.read().await;
+            if lkv.len() >= sz {
+                break;
+            }
+            std::mem::drop(lkv);
+            async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+        }
+        let mut lkv = self.buf.write().await;
+        lkv.cut_front(sz)
+        /* match lkv.cut_front(sz) {
+            Err(e) => Err(e),
+            Ok(v) => Ok(v.to_bytes()),
+        } */
+    }
+    pub fn notify_all(&self) {
+        self.wkr1.notify_all();
+        self.wkr2.notify_all();
+    }
+    /* pub async fn clear(&self) {
+        let mut lkv = self.buf.write().await;
+        lkv.clear();
+        self.wkr1.notify_one();
+    } */
+    pub async fn len(&self) -> usize {
+        let lkv = self.buf.read().await;
+        lkv.len()
+    }
+    pub fn set_max(&self, max: usize) {
+        self.max.store(max, Ordering::SeqCst);
+    }
+    pub fn set_maxs(&self, max: usize) {
+        let maxs = self.max.load(Ordering::SeqCst);
+        if max > maxs {
+            self.set_max(max);
+        }
+    }
+    pub async fn more_max(&self, adds: usize) {
+        let maxs = self.max.load(Ordering::SeqCst);
+        let sz = { self.buf.read().await.len() + adds };
+        if sz > maxs {
+            self.set_max(sz);
+        }
     }
 }

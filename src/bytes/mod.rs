@@ -1,5 +1,6 @@
 pub use bytes::ByteBox;
 pub use bytes::ByteBoxBuf;
+pub use bytes::ByteSteamBuf;
 pub use circle::CircleBuf;
 pub use stream::tcp_write;
 pub use stream::tcp_write_async;

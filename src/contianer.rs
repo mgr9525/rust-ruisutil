@@ -15,6 +15,11 @@ impl<T> Clone for ArcMut<T> {
         }
     }
 }
+impl<T> PartialEq for ArcMut<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptrs == other.ptrs
+    }
+}
 impl<T> Deref for ArcMut<T> {
     type Target = T;
 
