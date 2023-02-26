@@ -412,6 +412,16 @@ mod tests {
         pub fn get(&self) -> i32 {
             self.inner.i
         }
+
+        pub unsafe fn from_raw(p:*const Inner)->std::io::Result<Self>{
+          let inr=ArcMut::from_raw(p)?;
+          Ok(Self{inner:inr})
+        }
+
+        pub unsafe fn from_raws(p:*const Inner)->std::io::Result<Self>{
+          let inr=ArcMut::from_raws(p)?;
+          Ok(Self{inner:inr})
+        }
     }
 
     #[test]
@@ -424,6 +434,32 @@ mod tests {
         let ruis1 = ruis.clone();
         ruis1.set(4);
         println!("ruis i-3:{}", ruis.get());
+        
+        println!("ruis incount1={}",ruis.inner.arc_count());
+        std::mem::drop(ruis1);
+        println!("ruis incount2={}",ruis.inner.arc_count());
+        let raw=ruis.inner.into_raw();
+        println!("ruis incount1-3={}",ruis.inner.arc_count());
+        let ruis2=unsafe{Ruis::from_raw(raw).unwrap()};
+        println!("ruis incount1-4={}",ruis.inner.arc_count());
+        std::mem::drop(ruis2);
+        println!("ruis incount1-5={}",ruis.inner.arc_count());
+
+        
+        let raw=ruis.inner.into_raw();
+        println!("ruis incount2-3={}",ruis.inner.arc_count());
+        let ruis2=unsafe{Ruis::from_raws(raw).unwrap()};
+        println!("ruis incount2-4={}",ruis.inner.arc_count());
+        std::mem::drop(ruis2);
+        println!("ruis incount2-5={}",ruis.inner.arc_count());
+        
+        let ruis2=unsafe{Ruis::from_raws(raw).unwrap()};
+        println!("ruis incount3-4={}",ruis.inner.arc_count());
+        std::mem::drop(ruis2);
+        println!("ruis incount3-5={}",ruis.inner.arc_count());
+
+        std::mem::drop(unsafe{Ruis::from_raw(raw).unwrap()});
+        println!("ruis incountEnd={}",ruis.inner.arc_count());
     }
 
     #[test]

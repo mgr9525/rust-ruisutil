@@ -56,9 +56,27 @@ impl<T> ArcMut<T> {
     pub fn into_raw(&self) -> *const T {
         Arc::into_raw(self.inner.clone())
     }
-    pub unsafe fn from_raw(p: *const T) -> Self {
-        let inr = Arc::from_raw(p);
-        Self::from(inr)
+    /* pub unsafe fn into_raws(&self) -> *const T {
+        let ptr = Arc::into_raw(self.inner.clone());
+        Arc::increment_strong_count(ptr);
+        ptr
+    } */
+    pub unsafe fn from_raw(p: *const T) -> std::io::Result<Self> {
+        if p.is_null() {
+            Err(crate::ioerr("ptr is null", None))
+        } else {
+            let ac = Arc::from_raw(p);
+            Ok(Self::from(ac))
+        }
+    }
+    pub unsafe fn from_raws(p: *const T) -> std::io::Result<Self> {
+        if p.is_null() {
+            Err(crate::ioerr("ptr is null", None))
+        } else {
+            Arc::increment_strong_count(p);
+            let ac = Arc::from_raw(p);
+            Ok(Self::from(ac))
+        }
     }
 }
 
