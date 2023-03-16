@@ -214,6 +214,16 @@ pub fn print_hex(data: &[u8]) {
         print!(" {:x}", data[i]);
     }
 }
+pub fn sprint_hex(data: &[u8]) -> String {
+    let mut rts = String::new();
+    if data.len() <= 0 {
+        return rts;
+    }
+    for i in 0..data.len() {
+        rts += format!("{:x}", data[i]).as_str();
+    }
+    rts
+}
 pub fn md5str<S: Into<String>>(input: S) -> String {
     let ms = md5::compute(input.into().as_bytes());
     format!("{:x}", ms)
@@ -341,7 +351,7 @@ impl WaitGroup {
     pub fn wait(&self) {
         loop {
             std::thread::sleep(Duration::from_millis(100));
-            if self.done(){
+            if self.done() {
                 break;
             }
         }
@@ -349,16 +359,16 @@ impl WaitGroup {
     pub async fn waits(&self) {
         loop {
             async_std::task::sleep(Duration::from_millis(100)).await;
-            if self.done(){
+            if self.done() {
                 break;
             }
         }
     }
-    pub fn done(&self)->bool{
+    pub fn done(&self) -> bool {
         let count = self.inner.count.load(Ordering::SeqCst);
         if count <= 0 {
             true
-        }else{
+        } else {
             false
         }
     }
@@ -413,14 +423,14 @@ mod tests {
             self.inner.i
         }
 
-        pub unsafe fn from_raw(p:*const Inner)->std::io::Result<Self>{
-          let inr=ArcMut::from_raw(p)?;
-          Ok(Self{inner:inr})
+        pub unsafe fn from_raw(p: *const Inner) -> std::io::Result<Self> {
+            let inr = ArcMut::from_raw(p)?;
+            Ok(Self { inner: inr })
         }
 
-        pub unsafe fn from_raws(p:*const Inner)->std::io::Result<Self>{
-          let inr=ArcMut::from_raws(p)?;
-          Ok(Self{inner:inr})
+        pub unsafe fn from_raws(p: *const Inner) -> std::io::Result<Self> {
+            let inr = ArcMut::from_raws(p)?;
+            Ok(Self { inner: inr })
         }
     }
 
@@ -434,32 +444,31 @@ mod tests {
         let ruis1 = ruis.clone();
         ruis1.set(4);
         println!("ruis i-3:{}", ruis.get());
-        
-        println!("ruis incount1={}",ruis.inner.arc_count());
+
+        println!("ruis incount1={}", ruis.inner.arc_count());
         std::mem::drop(ruis1);
-        println!("ruis incount2={}",ruis.inner.arc_count());
-        let raw=ruis.inner.into_raw();
-        println!("ruis incount1-3={}",ruis.inner.arc_count());
-        let ruis2=unsafe{Ruis::from_raw(raw).unwrap()};
-        println!("ruis incount1-4={}",ruis.inner.arc_count());
+        println!("ruis incount2={}", ruis.inner.arc_count());
+        let raw = ruis.inner.into_raw();
+        println!("ruis incount1-3={}", ruis.inner.arc_count());
+        let ruis2 = unsafe { Ruis::from_raw(raw).unwrap() };
+        println!("ruis incount1-4={}", ruis.inner.arc_count());
         std::mem::drop(ruis2);
-        println!("ruis incount1-5={}",ruis.inner.arc_count());
+        println!("ruis incount1-5={}", ruis.inner.arc_count());
 
-        
-        let raw=ruis.inner.into_raw();
-        println!("ruis incount2-3={}",ruis.inner.arc_count());
-        let ruis2=unsafe{Ruis::from_raws(raw).unwrap()};
-        println!("ruis incount2-4={}",ruis.inner.arc_count());
+        let raw = ruis.inner.into_raw();
+        println!("ruis incount2-3={}", ruis.inner.arc_count());
+        let ruis2 = unsafe { Ruis::from_raws(raw).unwrap() };
+        println!("ruis incount2-4={}", ruis.inner.arc_count());
         std::mem::drop(ruis2);
-        println!("ruis incount2-5={}",ruis.inner.arc_count());
-        
-        let ruis2=unsafe{Ruis::from_raws(raw).unwrap()};
-        println!("ruis incount3-4={}",ruis.inner.arc_count());
-        std::mem::drop(ruis2);
-        println!("ruis incount3-5={}",ruis.inner.arc_count());
+        println!("ruis incount2-5={}", ruis.inner.arc_count());
 
-        std::mem::drop(unsafe{Ruis::from_raw(raw).unwrap()});
-        println!("ruis incountEnd={}",ruis.inner.arc_count());
+        let ruis2 = unsafe { Ruis::from_raws(raw).unwrap() };
+        println!("ruis incount3-4={}", ruis.inner.arc_count());
+        std::mem::drop(ruis2);
+        println!("ruis incount3-5={}", ruis.inner.arc_count());
+
+        std::mem::drop(unsafe { Ruis::from_raw(raw).unwrap() });
+        println!("ruis incountEnd={}", ruis.inner.arc_count());
     }
 
     #[test]
