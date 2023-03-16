@@ -145,6 +145,11 @@ impl From<Arc<Box<[u8]>>> for ByteBox {
         Self::new(v, 0, ln)
     }
 }
+impl From<&[u8]> for ByteBox {
+    fn from(v: &[u8]) -> Self {
+      Self::from(v.to_vec())
+    }
+}
 
 #[derive(Clone)]
 pub struct ByteBoxBuf {
