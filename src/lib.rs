@@ -216,11 +216,10 @@ pub fn print_hex(data: &[u8]) {
 }
 pub fn sprint_hex(data: &[u8]) -> String {
     let mut rts = String::new();
-    if data.len() <= 0 {
-        return rts;
-    }
-    for i in 0..data.len() {
-        rts += format!("{:x}", data[i]).as_str();
+    if data.len() > 0 {
+        for i in 0..data.len() {
+            rts += format!("{:x}", data[i]).as_str();
+        }
     }
     rts
 }
