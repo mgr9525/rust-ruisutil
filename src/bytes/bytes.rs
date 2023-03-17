@@ -147,7 +147,7 @@ impl From<Arc<Box<[u8]>>> for ByteBox {
 }
 impl From<&[u8]> for ByteBox {
     fn from(v: &[u8]) -> Self {
-      Self::from(v.to_vec())
+        Self::from(v.to_vec())
     }
 }
 
@@ -420,8 +420,7 @@ impl ByteSteamBuf {
         Ok(())
     }
     pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
-        let max = self.max.load(Ordering::SeqCst);
-        if max > 0 {
+        if self.get_max() > 0 {
             loop {
                 if self.ctx.done() {
                     return Err(crate::ioerr(
@@ -430,7 +429,7 @@ impl ByteSteamBuf {
                     ));
                 }
                 let lkv = self.buf.read().await;
-                if lkv.len() <= max {
+                if lkv.len() <= self.get_max() {
                     break;
                 }
                 std::mem::drop(lkv);
@@ -503,17 +502,20 @@ impl ByteSteamBuf {
         let lkv = self.buf.read().await;
         lkv.len()
     }
+    pub fn get_max(&self) -> usize {
+        self.max.load(Ordering::SeqCst)
+    }
     pub fn set_max(&self, max: usize) {
         self.max.store(max, Ordering::SeqCst);
     }
     pub fn set_maxs(&self, max: usize) {
-        let maxs = self.max.load(Ordering::SeqCst);
+        let maxs = self.get_max();
         if max > maxs {
             self.set_max(max);
         }
     }
     pub async fn more_max(&self, adds: usize) {
-        let maxs = self.max.load(Ordering::SeqCst);
+        let maxs = self.get_max();
         let sz = { self.buf.read().await.len() + adds };
         if sz > maxs {
             self.set_max(sz);
