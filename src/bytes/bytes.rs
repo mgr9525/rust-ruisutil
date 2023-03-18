@@ -221,6 +221,7 @@ impl ByteBoxBuf {
     }
     pub fn clear(&mut self) {
         self.list.clear();
+        self.count = 0;
     }
     pub fn iter(&self) -> linked_list::Iter<ByteBox> {
         self.list.iter()
