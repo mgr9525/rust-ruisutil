@@ -1,10 +1,13 @@
 use std::{
     io,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Condvar, Mutex,
+    },
     time::Duration,
 };
 
-use async_std::channel;
+use crate::Context;
 
 #[derive(Clone)]
 pub struct Waker {
@@ -12,68 +15,75 @@ pub struct Waker {
 }
 
 struct Inner {
-    closed: AtomicBool,
-    sx: Option<channel::Sender<()>>,
-    rx: Option<channel::Receiver<()>>,
+    ctx: Context,
+    lk: Mutex<bool>,
+    cond: Condvar,
 }
 
 impl Waker {
-    pub fn new() -> Self {
-        // let (sx, rx) = channel::unbounded::<()>();
+    pub fn new(ctx: &Context) -> Self {
         Self {
             inner: crate::ArcMut::new(Inner {
-                closed: AtomicBool::new(true),
-                sx: None,
-                rx: None,
+                ctx: Context::background(Some(ctx.clone())),
+                lk: Mutex::new(false),
+                cond: Condvar::new(),
             }),
         }
     }
-    async fn close(&self) {
-        if self.inner.closed.load(Ordering::SeqCst) {
-            return;
-        }
-        let ins = unsafe { self.inner.muts() };
-        self.inner.closed.store(true, Ordering::SeqCst);
-        if let Some(rx) = &self.inner.rx {
-            rx.close();
-        }
-        // ins.sx = None;
-        // ins.rx = None;
+    pub fn close(&self) {
+        self.inner.ctx.stop();
+        self.inner.cond.notify_all();
     }
-    pub async fn wait(&self) -> io::Result<()> {
-        if self.inner.closed.load(Ordering::SeqCst) {
-            let ins = unsafe { self.inner.muts() };
-            let (sx, rx) = channel::unbounded::<()>();
-            self.inner.closed.store(false, Ordering::SeqCst);
-            ins.sx = Some(sx);
-            ins.rx = Some(rx);
+    pub fn wait(&self) -> io::Result<()> {
+        if let Ok(mut lkv) = self.inner.lk.lock() {
+            *lkv = false;
+            while !*lkv {
+                if self.inner.ctx.done() {
+                    return Err(crate::ioerr("ctx is end", None));
+                }
+                match self.inner.cond.wait(lkv) {
+                    Ok(v) => lkv = v,
+                    Err(e) => return Err(crate::ioerr("cond wait err", None)),
+                };
+            }
+        } else {
+            return Err(crate::ioerr("lock err", None));
         }
 
-        if let Some(rx) = &self.inner.rx {
-            if let Err(e) = rx.recv().await {
-                return Err(crate::ioerr(format!("wait err:{}", e), None));
-            }
-        }
         Ok(())
     }
-    pub async fn wait_timeout(&self, tm: Duration) -> io::Result<()> {
-        match async_std::io::timeout(tm, self.wait()).await {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                self.close().await;
-                Err(e)
+    pub fn wait_timeout(&self, tm: Duration) -> io::Result<()> {
+        if let Ok(mut lkv) = self.inner.lk.lock() {
+            *lkv = false;
+            while !*lkv {
+                if self.inner.ctx.done() {
+                    return Err(crate::ioerr("ctx is end", None));
+                }
+                match self.inner.cond.wait_timeout(lkv, tm) {
+                    Ok((v, _)) => lkv = v,
+                    Err(e) => return Err(crate::ioerr("cond wait err", None)),
+                };
+            }
+        } else {
+            return Err(crate::ioerr("lock err", None));
+        }
+
+        Ok(())
+    }
+    pub fn notify_one(&self) {
+        if !self.inner.ctx.done() {
+            if let Ok(mut lkv) = self.inner.lk.lock() {
+                *lkv = true;
+                self.inner.cond.notify_one();
             }
         }
     }
-    pub async fn notify_one(&self) {
-        if self.inner.closed.load(Ordering::SeqCst) {
-            return;
+    pub fn notify_all(&self) {
+        if !self.inner.ctx.done() {
+            if let Ok(mut lkv) = self.inner.lk.lock() {
+                *lkv = true;
+                self.inner.cond.notify_all();
+            }
         }
-        if let Some(sx) = &self.inner.sx {
-            sx.send(()).await;
-        }
-    }
-    pub async fn notify_all(&self) {
-        self.close().await;
     }
 }
