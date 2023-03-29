@@ -344,6 +344,11 @@ impl ByteBoxBuf {
         rtbts
     }
     pub fn to_byte_box(&self) -> ByteBox {
+        if self.list.len() == 1 {
+            if let Some(bts) = self.list.front() {
+                return bts.clone();
+            }
+        }
         ByteBox::from(self.to_bytes())
     }
 }

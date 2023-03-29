@@ -193,15 +193,24 @@ pub fn env(key: &str) -> Option<String> {
     }
 }
 pub fn envs(key: &str, defs: &str) -> String {
-    match std::env::var(key) {
-        Err(_) => String::from(defs),
-        Ok(vs) => {
+    match env(key) {
+        None => String::from(defs),
+        Some(vs) => {
             if vs.is_empty() {
                 String::from(defs)
             } else {
                 vs
             }
         }
+    }
+}
+pub fn envi(key: &str, defs: i64) -> i64 {
+    match env(key) {
+        None => defs,
+        Some(vs) => match vs.parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => defs,
+        },
     }
 }
 
