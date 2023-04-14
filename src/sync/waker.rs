@@ -30,6 +30,9 @@ impl Waker {
             }),
         }
     }
+    pub fn done(&self) -> bool {
+        self.inner.ctx.done()
+    }
     pub fn close(&self) {
         self.inner.ctx.stop();
         self.inner.cond.notify_all();
