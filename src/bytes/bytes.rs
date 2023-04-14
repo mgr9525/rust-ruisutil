@@ -405,13 +405,14 @@ pub struct ByteSteamBuf {
 
 impl ByteSteamBuf {
     pub fn new(ctx: &crate::Context, max: usize, tmout: Duration) -> Self {
+        let ctx = crate::Context::background(Some(ctx.clone()));
         Self {
-            ctx: crate::Context::background(Some(ctx.clone())),
+            ctx: ctx.clone(),
             buf: RwLock::new(ByteBoxBuf::new()),
             max: AtomicUsize::new(max),
             tmout: tmout,
-            wkr1: WakerFut::new(),
-            wkr2: WakerFut::new(),
+            wkr1: WakerFut::new(&ctx),
+            wkr2: WakerFut::new(&ctx),
         }
     }
     pub fn close(&self) {
@@ -439,6 +440,7 @@ impl ByteSteamBuf {
                     break;
                 }
                 std::mem::drop(lkv);
+                // self.wkr1.wait_timeout(self.tmout.clone());
                 async_std::io::timeout(self.tmout.clone(), self.wkr1.clone()).await;
                 // self.wkr1.notify_all();
             }
@@ -455,6 +457,7 @@ impl ByteSteamBuf {
                 break;
             }
             std::mem::drop(lkv);
+            // self.wkr2.wait_timeout(self.tmout.clone());
             async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
             // self.wkr2.notify_all();
         }
@@ -486,6 +489,7 @@ impl ByteSteamBuf {
                 break;
             }
             std::mem::drop(lkv);
+            // self.wkr2.wait_timeout(self.tmout.clone());
             async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
         }
         let mut lkv = self.buf.write().await;

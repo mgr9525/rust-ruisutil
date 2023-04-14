@@ -4,7 +4,10 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Mutex,
     },
+    time::Duration,
 };
+
+use crate::Context;
 
 pub struct WakerFut {
     wk: Option<std::task::Waker>,
@@ -12,7 +15,7 @@ pub struct WakerFut {
 }
 
 struct Inner {
-    closed: AtomicBool,
+    ctx: Context,
     ticks: Mutex<Vec<Item>>,
 }
 struct Item {
@@ -29,21 +32,24 @@ impl Clone for WakerFut {
     }
 }
 impl WakerFut {
-    pub fn new() -> Self {
+    pub fn new(ctx: &Context) -> Self {
         // let (sx, rx) = channel::unbounded::<()>();
         Self {
             wk: None,
             inner: crate::ArcMut::new(Inner {
-                closed: AtomicBool::new(false),
+                ctx: Context::background(Some(ctx.clone())),
                 ticks: Mutex::new(Vec::new()),
             }),
         }
     }
+    pub fn done(&self) -> bool {
+        self.inner.ctx.done()
+    }
     pub fn close(&self) {
-        if self.inner.closed.load(Ordering::SeqCst) {
+        if self.inner.ctx.done() {
             return;
         }
-        self.inner.closed.store(true, Ordering::SeqCst);
+        self.inner.ctx.stop();
         self.notify_all();
     }
     pub fn notify_one(&self) {
@@ -66,14 +72,8 @@ impl WakerFut {
             v.wk.wake_by_ref();
         }
     }
-    /* fn checks(&self, cx: &mut std::task::Context<'_>) -> impl Future<Output = i32> {
-        async {123}.boxed()
-    } */
-    fn is_close(&self) -> bool {
-        self.inner.closed.load(Ordering::SeqCst)
-    }
     fn checks(&self, it: &Item) -> bool {
-        if self.is_close() {
+        if self.done() {
             return true;
         }
         if it.ticked.load(Ordering::SeqCst) {
@@ -90,7 +90,7 @@ impl Future for WakerFut {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = self.get_mut();
-        if this.is_close() {
+        if this.done() {
             return std::task::Poll::Ready(Ok(()));
         }
         let mut lkv = match this.inner.ticks.lock() {
