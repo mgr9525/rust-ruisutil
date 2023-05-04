@@ -78,3 +78,32 @@ pub async fn tcp_write_async(
     }
     Ok(wnz)
 }
+
+pub async fn tcp_writes_async(
+    ctx: &Context,
+    stream: &mut async_std::net::TcpStream,
+    bts: &[u8],
+) -> io::Result<usize> {
+    if bts.len() <= 0 {
+        return Ok(0);
+    }
+    let mut wn = 0usize;
+    while wn < bts.len() {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.write(&bts[wn..]).await {
+            Err(e) => return Err(e),
+            Ok(n) => {
+                if n > 0 {
+                    wn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+                }
+            }
+        }
+    }
+    Ok(wn)
+}
