@@ -186,6 +186,67 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
+pub async fn read_all_async<T:async_std::io::ReadExt+Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    ln: usize,
+) -> io::Result<Box<[u8]>> {
+    if ln <= 0 {
+        return Ok(Box::new([0u8; 0]));
+    }
+    let mut rn = 0usize;
+    let mut data = vec![0u8; ln];
+    while rn < ln {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.read(&mut data[rn..]).await {
+            Ok(n) => {
+                if n > 0 {
+                    rn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("read err len:{}!", n),
+                    ));
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(data.into_boxed_slice())
+}
+pub async fn write_all_async<T:async_std::io::WriteExt+Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    bts: &[u8],
+) -> io::Result<usize> {
+    if bts.len() <= 0 {
+        return Ok(0);
+    }
+    let mut wn = 0usize;
+    while wn < bts.len() {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.write(&bts[wn..]).await {
+            Err(e) => return Err(e),
+            Ok(n) => {
+                if n > 0 {
+                    wn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+                }
+            }
+        }
+    }
+    Ok(wn)
+}
+
 pub fn env(key: &str) -> Option<String> {
     match std::env::var(key) {
         Err(_) => None,
@@ -228,6 +289,19 @@ pub fn sprint_hex(data: &[u8]) -> String {
     if data.len() > 0 {
         rts += format!("{:x}", data[0]).as_str();
         for i in 1..data.len() {
+            rts += format!(",{:x}", data[i]).as_str();
+        }
+    }
+    rts
+}
+pub fn sprints_hex(data: &[u8], mut ln: usize) -> String {
+    let mut rts = String::new();
+    if data.len() > 0 {
+        if ln <= 0 || ln > data.len() {
+            ln = data.len();
+        }
+        rts += format!("{:x}", data[0]).as_str();
+        for i in 1..ln {
             rts += format!(",{:x}", data[i]).as_str();
         }
     }
