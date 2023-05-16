@@ -1,10 +1,10 @@
 extern crate async_std;
 extern crate chrono;
 extern crate md5;
-extern crate rand;
+// extern crate rand;
 
 use async_std::prelude::*;
-use rand::{distributions::Standard, prelude::Distribution, Rng};
+// use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::{
     error,
     io::{self, Read, Write},
@@ -186,7 +186,7 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
-pub async fn read_all_async<T:async_std::io::ReadExt+Unpin>(
+pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
     ctx: &Context,
     stream: &mut T,
     ln: usize,
@@ -218,7 +218,7 @@ pub async fn read_all_async<T:async_std::io::ReadExt+Unpin>(
     }
     Ok(data.into_boxed_slice())
 }
-pub async fn write_all_async<T:async_std::io::WriteExt+Unpin>(
+pub async fn write_all_async<T: async_std::io::WriteExt + Unpin>(
     ctx: &Context,
     stream: &mut T,
     bts: &[u8],
@@ -311,7 +311,41 @@ pub fn md5str<S: Into<String>>(input: S) -> String {
     let ms = md5::compute(input.into().as_bytes());
     format!("{:x}", ms)
 }
-pub fn rands<T>() -> T
+
+pub fn times() -> (Duration, i8) {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => (n, 1),
+        Err(_) => match SystemTime::UNIX_EPOCH.duration_since(SystemTime::now()) {
+            Ok(n) => (n, 0),
+            Err(_) => (Duration::default(), -1),
+        },
+    }
+}
+pub fn randtms() -> u32 {
+    let (tms, _) = times();
+    (tms.as_nanos() & 0xffffffff) as u32
+}
+
+pub fn randtms_ang(a: u32, b: u32) -> u32 {
+    if b <= 0 || a > b {
+        return 0;
+    }
+    let mut rds = randtms();
+    if rds > b {
+        rds %= b;
+    }
+    while rds != 0 {
+        if rds > b {
+            rds /= 2;
+        } else if rds < a {
+            rds = rds * 2 + 1;
+        } else {
+            break;
+        }
+    }
+    rds
+}
+/* pub fn rands<T>() -> T
 where
     Standard: Distribution<T>,
 {
@@ -321,17 +355,19 @@ where
 pub fn randgs(a: i32, b: i32) -> i32 {
     let mut rng = rand::thread_rng();
     rng.gen_range(a..b)
+} */
+pub fn randoms() -> String {
+    randtms().to_string()
 }
 pub fn random(ln: usize) -> String {
     let mut res = String::new();
     if ln <= 0 {
         return res;
     }
-    let mut rng = rand::thread_rng();
     const BS: &[u8] = b"0123456789AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
     for _ in 0..ln {
-        let i = rng.gen_range(0..BS.len());
-        res.push(BS[i] as char);
+        let i = randtms_ang(0, BS.len() as u32);
+        res.push(BS[i as usize] as char);
     }
     res
 }
@@ -556,7 +592,18 @@ mod tests {
 
     #[test]
     fn rands() {
-        println!("randoms:{}", crate::random(32));
+        println!("randtms:{}", crate::randtms());
+        println!("randoms:{}", crate::randoms());
+        println!("randtms_ang:{}", crate::randtms_ang(10, 60));
+        println!("random:{}", crate::random(32));
+    }
+    #[test]
+    fn randtms() {
+        let (tms, _) = crate::times();
+        let tmsi = tms.as_nanos();
+        // let tmsibts=tmsi.to_le_bytes();
+        let tmsix = (tmsi & 0xffffffff) as u32;
+        println!("tmsi:{}, tmsix:{}", tmsi, tmsix);
     }
 
     #[test]

@@ -7,6 +7,6 @@ edition = "2018"
 
 [dependencies]
 md5 = "0.7.0"
-rand = "0.8.4"
+# rand = "0.8.4"
 chrono = "0.4.19"
 async-std = "1.*"
