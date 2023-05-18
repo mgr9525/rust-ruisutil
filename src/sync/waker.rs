@@ -58,14 +58,11 @@ impl Waker {
     pub fn wait_timeout(&self, tm: Duration) -> io::Result<()> {
         if let Ok(mut lkv) = self.inner.lk.lock() {
             *lkv = false;
-            while !*lkv {
-                if self.inner.ctx.done() {
-                    return Err(crate::ioerr("ctx is end", None));
-                }
-                match self.inner.cond.wait_timeout(lkv, tm) {
-                    Ok((v, _)) => lkv = v,
-                    Err(e) => return Err(crate::ioerr("cond wait err", None)),
-                };
+            if self.inner.ctx.done() {
+                return Err(crate::ioerr("ctx is end", None));
+            }
+            if let Err(e)=self.inner.cond.wait_timeout(lkv, tm){
+                return Err(crate::ioerr("cond wait err", None));
             }
         } else {
             return Err(crate::ioerr("lock err", None));
