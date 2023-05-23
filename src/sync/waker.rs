@@ -61,9 +61,6 @@ impl Waker {
         }
         if let Ok(mut lkv) = self.inner.lk.lock() {
             *lkv = false;
-            if self.inner.ctx.done() {
-                return Err(crate::ioerr("ctx is end", None));
-            }
             if let Err(e) = self.inner.cond.wait_timeout(lkv, tm) {
                 return Err(crate::ioerr("cond wait err", None));
             }
