@@ -24,6 +24,7 @@ pub mod bytes;
 mod contianer;
 pub mod message;
 pub mod sync;
+pub mod conf;
 mod timer;
 
 pub fn byte_2i(bts: &[u8]) -> i64 {
@@ -513,7 +514,7 @@ mod tests {
 
     use async_std::task;
 
-    use crate::{bytes::CircleBuf, ArcMut, Context};
+    use crate::{bytes::CircleBuf, ArcMut, Context, conf::KVConfig};
 
     #[test]
     fn it_works() {
@@ -687,5 +688,20 @@ mod tests {
             // task::sleep(Duration::from_secs(40)).await;
             println!("the end!!!!");
         });
+    }
+
+    #[test]
+    fn kvcfg() {
+        let cfgs=KVConfig::from_bytes(b"abc=123
+        hahah=
+        123124124
+        ruis= shuai");
+        for (k,v) in cfgs.iter(){
+            println!("cfg: {} = {}",k,v);
+        }
+
+        println!("-----------------parse end");
+        println!("tos:\n{}",cfgs.to_string());
+        println!("-----------------tos end");
     }
 }
