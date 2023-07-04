@@ -19,6 +19,7 @@ use std::{
 pub use contianer::ArcMut;
 // pub use contianer::ArcMutBox;
 pub use timer::Timer;
+pub use list::VecDequeMax;
 
 pub mod bytes;
 mod contianer;

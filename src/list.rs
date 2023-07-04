@@ -20,6 +20,10 @@ impl<T> VecDequeMax<T> {
     }
     pub fn push(&mut self, d: T) {
         self.ls.push_back(d);
+
+        if self.len() > self.max {
+            self.pop();
+        }
     }
     pub fn pop(&mut self) -> Option<T> {
         self.ls.pop_front()
