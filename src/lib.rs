@@ -26,6 +26,7 @@ pub mod message;
 pub mod sync;
 pub mod conf;
 mod timer;
+mod list;
 
 pub fn byte_2i(bts: &[u8]) -> i64 {
     let mut rt = 0i64;
