@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
+use std::collections::LinkedList;
 
 pub struct VecDequeMax<T> {
-    ls: VecDeque<T>,
+    ls: LinkedList<T>,
     max: usize,
 }
 
@@ -11,7 +11,7 @@ impl<T> VecDequeMax<T> {
             max = 20;
         }
         Self {
-            ls: VecDeque::new(),
+            ls: LinkedList::new(),
             max: max,
         }
     }
