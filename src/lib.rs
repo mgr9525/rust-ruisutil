@@ -18,16 +18,16 @@ use std::{
 
 pub use contianer::ArcMut;
 // pub use contianer::ArcMutBox;
-pub use timer::Timer;
 pub use list::VecDequeMax;
+pub use timer::Timer;
 
 pub mod bytes;
+pub mod conf;
 mod contianer;
+mod list;
 pub mod message;
 pub mod sync;
-pub mod conf;
 mod timer;
-mod list;
 
 pub fn byte_2i(bts: &[u8]) -> i64 {
     let mut rt = 0i64;
@@ -380,6 +380,18 @@ where
 {
     format!("{}", dt.into().format(s))
 }
+pub fn strftime_off<T>(dt: T, s: &str, hour: i32) -> String
+where
+    T: Into<chrono::DateTime<chrono::Utc>>,
+{
+    if let Some(v) = chrono::FixedOffset::east_opt(hour * 3600) {
+        let tm: chrono::DateTime<chrono::Utc> = dt.into();
+        let tme = tm.with_timezone(&v);
+        format!("{}", tme.format(s))
+    } else {
+        "ErrHour".to_string()
+    }
+}
 pub fn strftime_utc<T>(dt: T, s: &str) -> String
 where
     T: Into<chrono::DateTime<chrono::Utc>>,
@@ -516,7 +528,7 @@ mod tests {
 
     use async_std::task;
 
-    use crate::{bytes::CircleBuf, ArcMut, Context, conf::KVConfig};
+    use crate::{bytes::CircleBuf, conf::KVConfig, ArcMut, Context};
 
     #[test]
     fn it_works() {
@@ -694,16 +706,18 @@ mod tests {
 
     #[test]
     fn kvcfg() {
-        let cfgs=KVConfig::from_bytes(b"abc=123
+        let cfgs = KVConfig::from_bytes(
+            b"abc=123
         hahah=
         123124124
-        ruis= shuai");
-        for (k,v) in cfgs.iter(){
-            println!("cfg: {} = {}",k,v);
+        ruis= shuai",
+        );
+        for (k, v) in cfgs.iter() {
+            println!("cfg: {} = {}", k, v);
         }
 
         println!("-----------------parse end");
-        println!("tos:\n{}",cfgs.to_string());
+        println!("tos:\n{}", cfgs.to_string());
         println!("-----------------tos end");
     }
 }

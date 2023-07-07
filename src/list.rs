@@ -31,4 +31,7 @@ impl<T> VecDequeMax<T> {
     pub fn pop(&mut self) -> Option<T> {
         self.ls.pop_front()
     }
+    pub fn front(&self) -> Option<&T> {
+        self.ls.front()
+    }
 }
