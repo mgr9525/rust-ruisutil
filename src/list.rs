@@ -1,11 +1,11 @@
 use std::collections::LinkedList;
 
-pub struct VecDequeMax<T> {
+pub struct ListDequeMax<T> {
     ls: LinkedList<T>,
     max: usize,
 }
 
-impl<T> VecDequeMax<T> {
+impl<T> ListDequeMax<T> {
     pub fn new(mut max: usize) -> Self {
         if max <= 0 {
             max = 20;
