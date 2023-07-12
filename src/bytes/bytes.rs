@@ -420,6 +420,26 @@ impl ByteSteamBuf {
         self.wkr1.close();
         self.wkr2.close();
     }
+    pub async fn waits(&self, ctx: Option<&crate::Context>) {
+        let ctxs = match ctx {
+            Some(v) => v,
+            None => &self.ctx,
+        };
+        while !ctxs.done() {
+            let lkv = self.buf.read().await;
+            if lkv.len() <= 0 {
+                break;
+            }
+            std::mem::drop(lkv);
+            async_std::task::sleep(Duration::from_millis(200)).await;
+        }
+    }
+    pub async fn clear(&self) {
+        let mut lkv = self.buf.write().await;
+        lkv.clear();
+        self.wkr1.notify_all();
+        self.wkr2.notify_all();
+    }
     pub async fn push_all(&self, data: &ByteBoxBuf) -> io::Result<()> {
         for v in data.iter() {
             self.push(v.clone()).await?;
