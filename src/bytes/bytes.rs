@@ -431,7 +431,7 @@ impl ByteSteamBuf {
                 break;
             }
             std::mem::drop(lkv);
-            async_std::task::sleep(Duration::from_millis(200)).await;
+            async_std::io::timeout(Duration::from_millis(200), self.wkr1.clone()).await;
         }
     }
     pub async fn clear(&self) {

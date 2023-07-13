@@ -472,18 +472,23 @@ pub struct WaitGroup {
 /// Inner state of a `WaitGroup`.
 struct WgInner {
     count: AtomicI32,
+    wkr1: sync::Waker,
+    wkr2: sync::WakerFut,
 }
 impl WaitGroup {
     pub fn new() -> Self {
+        let ctx = Context::background(None);
         Self {
             inner: Arc::new(WgInner {
                 count: AtomicI32::new(0),
+                wkr1: sync::Waker::new(&ctx),
+                wkr2: sync::WakerFut::new(&ctx),
             }),
         }
     }
     pub fn wait(&self) {
         loop {
-            std::thread::sleep(Duration::from_millis(100));
+            self.inner.wkr1.wait_timeout(Duration::from_millis(100));
             if self.done() {
                 break;
             }
@@ -491,7 +496,7 @@ impl WaitGroup {
     }
     pub async fn waits(&self) {
         loop {
-            async_std::task::sleep(Duration::from_millis(100)).await;
+            async_std::io::timeout(Duration::from_millis(100), self.inner.wkr2.clone()).await;
             if self.done() {
                 break;
             }
@@ -509,6 +514,8 @@ impl WaitGroup {
 impl Drop for WaitGroup {
     fn drop(&mut self) {
         self.inner.count.fetch_add(-1, Ordering::SeqCst);
+        self.inner.wkr1.notify_all();
+        self.inner.wkr2.notify_all();
     }
 }
 
@@ -674,9 +681,12 @@ mod tests {
 
     #[test]
     fn wgs() {
+        let wgt = crate::WaitGroup::new();
+        let wgtcg = wgt.clone();
         task::block_on(async move {
             let wg = crate::WaitGroup::new();
             let wgc = wg.clone();
+            let wgtc = wgtcg.clone();
             task::spawn(async move {
                 let mut n = 0;
                 while n < 30 * 100 * 2 {
@@ -685,8 +695,10 @@ mod tests {
                 }
                 println!("task end1!!!!");
                 std::mem::drop(wgc);
+                std::mem::drop(wgtc);
             });
             let wgc = wg.clone();
+            let wgtc = wgtcg.clone();
             task::spawn(async move {
                 let mut n = 0;
                 while n < 40 * 100 * 2 {
@@ -695,12 +707,24 @@ mod tests {
                 }
                 println!("task end2!!!!");
                 std::mem::drop(wgc);
+                std::mem::drop(wgtc);
+            });
+            let wgtc = wgtcg.clone();
+            std::thread::spawn(move || {
+                let mut n = 0;
+                while n < 50 * 100 * 2 {
+                    n += 1;
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                println!("task end3!!!!");
+                std::mem::drop(wgtc);
             });
             println!("start waits!!!!");
             wg.waits().await;
-            // task::sleep(Duration::from_secs(40)).await;
-            println!("the end!!!!");
+            println!("the end1!!!!");
         });
+        wgt.wait();
+        println!("the end2!!!!");
     }
 
     #[test]
