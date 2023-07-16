@@ -313,6 +313,10 @@ pub fn md5str<S: Into<String>>(input: S) -> String {
     let ms = md5::compute(input.into().as_bytes());
     format!("{:x}", ms)
 }
+pub fn md5strs<S: AsRef<[u8]>>(input: S) -> String {
+    let ms = md5::compute(input);
+    format!("{:x}", ms)
+}
 
 pub fn times() -> (Duration, i8) {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
