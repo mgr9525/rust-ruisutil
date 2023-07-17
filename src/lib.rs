@@ -490,16 +490,26 @@ impl WaitGroup {
             }),
         }
     }
-    pub fn wait(&self) {
+    pub fn wait(&self, ctxs: Option<Context>) {
         loop {
+            if let Some(v) = &ctxs {
+                if v.done() {
+                    break;
+                }
+            }
             self.inner.wkr1.wait_timeout(Duration::from_millis(100));
             if self.done() {
                 break;
             }
         }
     }
-    pub async fn waits(&self) {
+    pub async fn waits(&self, ctxs: Option<Context>) {
         loop {
+            if let Some(v) = &ctxs {
+                if v.done() {
+                    break;
+                }
+            }
             async_std::io::timeout(Duration::from_millis(100), self.inner.wkr2.clone()).await;
             if self.done() {
                 break;
