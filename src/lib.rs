@@ -544,7 +544,7 @@ impl Clone for WaitGroup {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use async_std::task;
 
@@ -643,10 +643,13 @@ mod tests {
 
     #[test]
     fn md5s() {
-        println!(
-            "md5s:{}",
-            crate::md5str("ahsdhflasjdklfjalskdjflksdjlfkjslkdjf")
-        );
+        let md5s = "48c4a8a547cadf2e245e867bcb4c27a6";
+        let tms = crate::strftime(SystemTime::now(), "%+");
+        let rands = crate::randoms();
+        let srcs = format!("{}{}{}{}", &md5s, &tms, &rands, "asdfasdf");
+        println!("srcs:{}", &srcs);
+        let signs = crate::md5str(srcs);
+        println!("md5s:{}", &signs);
     }
 
     #[test]
@@ -734,10 +737,10 @@ mod tests {
                 std::mem::drop(wgtc);
             });
             println!("start waits!!!!");
-            wg.waits().await;
+            wg.waits(None).await;
             println!("the end1!!!!");
         });
-        wgt.wait();
+        wgt.wait(None);
         println!("the end2!!!!");
     }
 
