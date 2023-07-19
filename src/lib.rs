@@ -281,30 +281,30 @@ pub fn print_hex(data: &[u8]) {
     if data.len() <= 0 {
         return;
     }
-    print!("{:x}", data[0]);
+    print!("{:02x}", data[0]);
     for i in 1..data.len() {
-        print!(" {:x}", data[i]);
+        print!(" {:02x}", data[i]);
     }
 }
-pub fn sprint_hex(data: &[u8]) -> String {
+pub fn sprint_hex(data: &[u8], splts: &str) -> String {
     let mut rts = String::new();
     if data.len() > 0 {
-        rts += format!("{:x}", data[0]).as_str();
+        rts += format!("{:02x}", data[0]).as_str();
         for i in 1..data.len() {
-            rts += format!(",{:x}", data[i]).as_str();
+            rts += format!("{}{:02x}", splts, data[i]).as_str();
         }
     }
     rts
 }
-pub fn sprints_hex(data: &[u8], mut ln: usize) -> String {
+pub fn sprints_hex(data: &[u8], mut ln: usize, splts: &str) -> String {
     let mut rts = String::new();
     if data.len() > 0 {
         if ln <= 0 || ln > data.len() {
             ln = data.len();
         }
-        rts += format!("{:x}", data[0]).as_str();
+        rts += format!("{:02x}", data[0]).as_str();
         for i in 1..ln {
-            rts += format!(",{:x}", data[i]).as_str();
+            rts += format!("{}{:02x}", splts, data[i]).as_str();
         }
     }
     rts
@@ -759,5 +759,10 @@ mod tests {
         println!("-----------------parse end");
         println!("tos:\n{}", cfgs.to_string());
         println!("-----------------tos end");
+    }
+
+    #[test]
+    fn hex() {
+        crate::print_hex(&vec![0xaa, 0xb3, 0x0a, 0x0c, 0x00]);
     }
 }
