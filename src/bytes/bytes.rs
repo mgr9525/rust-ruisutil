@@ -420,10 +420,10 @@ impl ByteSteamBuf {
         self.wkr1.close();
         self.wkr2.close();
     }
-    pub async fn waits(&self, ctx: Option<&crate::Context>) {
-        let ctxs = match ctx {
-            Some(v) => v,
-            None => &self.ctx,
+    pub async fn waits(&self, tmout: Option<Duration>) {
+        let ctxs = match tmout {
+            Some(v) => crate::Context::with_timeout(Some(self.ctx.clone()),v),
+            None => self.ctx.clone(),
         };
         while !ctxs.done() {
             let lkv = self.buf.read().await;
