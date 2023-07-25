@@ -700,7 +700,11 @@ mod tests {
             Ok(v) => println!("strptime tm1[12] ok:{}", crate::strftime(v.clone(), "%+")),
             Err(e) => println!("strptime tm1[12] err:{}", e),
         }
-        match crate::strptime_off(&tm2, "%Y-%m-%d %H:%M:%S", 10) {
+        match crate::strptime_off(
+            format!("{}.mp4", &tm2).as_str(),
+            "%Y-%m-%d %H:%M:%S.mp4",
+            10,
+        ) {
             Ok(v) => println!(
                 "strptime tm2[12] ok:{},{}",
                 crate::strftime(v.clone(), "%+"),
