@@ -4,6 +4,7 @@ extern crate md5;
 // extern crate rand;
 
 use async_std::prelude::*;
+use chrono::{Offset, TimeZone};
 // use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::{
     error,
@@ -402,12 +403,41 @@ where
     format!("{}", dt.into().format(s))
 }
 pub fn strptime(t: &str, s: &str) -> io::Result<SystemTime> {
-    let date = match chrono::DateTime::parse_from_str(t, s) {
-        Err(e) => return Err(crate::ioerr(format!("parse err:{}", e), None)),
-        Ok(v) => v,
-    };
-    let tm = SystemTime::from(date);
-    Ok(tm)
+    match chrono::DateTime::parse_from_str(t, s) {
+        Ok(v) => Ok(SystemTime::from(v)),
+        Err(e) => Err(crate::ioerr(format!("parse {} err:{}", t, e), None)),
+    }
+}
+pub fn strptime_off(t: &str, s: &str, hour: i32) -> io::Result<SystemTime> {
+    match chrono::FixedOffset::east_opt(hour * 3600) {
+        None => Err(crate::ioerr(format!("timezone offset {} err", hour), None)),
+        Some(fot) => match chrono::DateTime::parse_from_str(t, s) {
+            Ok(v) => Ok(SystemTime::from(v)),
+            Err(_) => match chrono::NaiveDateTime::parse_from_str(t, s) {
+                Ok(nvt) => {
+                    let tme = match fot.from_local_datetime(&nvt) {
+                        chrono::LocalResult::None => {
+                            return Err(crate::ioerr("local tm nil", None))
+                        }
+                        chrono::LocalResult::Single(v) => v,
+                        chrono::LocalResult::Ambiguous(v, e) => {
+                            return Err(crate::ioerr("local tm err", None))
+                        }
+                    };
+                    Ok(SystemTime::from(tme))
+                }
+                Err(e) => Err(crate::ioerr(format!("parse {} err:{}", t, e), None)),
+            },
+        },
+    }
+    /* if date.offset().fix().local_minus_utc() == 0 {
+        println!("------test:{} in utc", t);
+        if let Some(v) = chrono::FixedOffset::east_opt(hour * 3600) {
+            let tme = date.with_timezone(&v);
+            return Ok(SystemTime::from(tme));
+        }
+    } */
+    // Err(crate::ioerr(format!("parse {} err:{}", t, s), None))
 }
 
 #[derive(Clone)]
@@ -661,6 +691,24 @@ mod tests {
             Err(e) => println!("strptime err:{}", e),
             Ok(v) => println!("parse:{}", crate::strftime(v.clone(), "%+")),
         }
+
+        let tm1 = crate::strftime_off(now.clone(), "%+", 10);
+        let tm2 = crate::strftime_off(now.clone(), "%Y-%m-%d %H:%M:%S", 10);
+        println!("tm1={}", &tm1);
+        println!("tm2={}", &tm2);
+        match crate::strptime_off(&tm1, "%+", 10) {
+            Ok(v) => println!("strptime tm1[12] ok:{}", crate::strftime(v.clone(), "%+")),
+            Err(e) => println!("strptime tm1[12] err:{}", e),
+        }
+        match crate::strptime_off(&tm2, "%Y-%m-%d %H:%M:%S", 10) {
+            Ok(v) => println!(
+                "strptime tm2[12] ok:{},{}",
+                crate::strftime(v.clone(), "%+"),
+                crate::strftime_off(v.clone(), "%Y-%m-%d %H:%M:%S", 10)
+            ),
+            Err(e) => println!("strptime tm2[12] err:{}", e),
+        }
+        println!("end!!!!!!");
     }
 
     #[test]
