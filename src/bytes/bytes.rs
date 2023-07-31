@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature="asyncs")]
+#[cfg(feature = "asyncs")]
 use async_std::sync::RwLock;
 
 use crate::{ioerr, sync::WakerFut};
@@ -34,6 +34,16 @@ impl ByteBox {
             end: if end > 0 { end } else { dt.len() },
             data: dt,
         }
+    }
+    pub fn news(dt: Box<[u8]>, start: usize, end: usize) -> Self {
+        Self {
+            start: start,
+            end: if end > 0 { end } else { dt.len() },
+            data: Arc::new(dt),
+        }
+    }
+    pub fn newlen(dt: Box<[u8]>, end: usize) -> Self {
+        Self::news(dt, 0, end)
     }
     pub fn cut(&mut self, pos: usize) -> io::Result<Self> {
         let posd = pos + self.start;
@@ -395,7 +405,7 @@ impl Write for ByteBoxBuf {
     }
 }
 
-#[cfg(feature="asyncs")]
+#[cfg(feature = "asyncs")]
 pub struct ByteSteamBuf {
     ctx: crate::Context,
     buf: RwLock<ByteBoxBuf>,
@@ -405,7 +415,7 @@ pub struct ByteSteamBuf {
     wkr2: WakerFut,
 }
 
-#[cfg(feature="asyncs")]
+#[cfg(feature = "asyncs")]
 impl ByteSteamBuf {
     pub fn new(ctx: &crate::Context, max: usize, tmout: Duration) -> Self {
         let ctx = crate::Context::background(Some(ctx.clone()));
@@ -425,7 +435,7 @@ impl ByteSteamBuf {
     }
     pub async fn waits(&self, tmout: Option<Duration>) {
         let ctxs = match tmout {
-            Some(v) => crate::Context::with_timeout(Some(self.ctx.clone()),v),
+            Some(v) => crate::Context::with_timeout(Some(self.ctx.clone()), v),
             None => self.ctx.clone(),
         };
         while !ctxs.done() {
