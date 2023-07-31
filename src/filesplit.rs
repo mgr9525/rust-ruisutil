@@ -78,11 +78,11 @@ impl FileSpliter {
             if pth.exists() && pth.is_dir() {
                 return Err(crate::ioerr("file path is err", None));
             }
-            if let Some(e) = pth.parent() {
-                if e.exists() && !e.is_dir() {
+            if let Some(o) = pth.parent() {
+                if o.exists() && !o.is_dir() {
                     return Err(crate::ioerr("file path is err", None));
                 }
-                std::fs::create_dir(e);
+                std::fs::create_dir_all(o);
             }
         }
         while !self.inner.ctx.done() {
