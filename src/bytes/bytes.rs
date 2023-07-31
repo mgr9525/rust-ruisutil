@@ -9,6 +9,7 @@ use std::{
     time::Duration,
 };
 
+#[cfg(feature="asyncs")]
 use async_std::sync::RwLock;
 
 use crate::{ioerr, sync::WakerFut};
@@ -394,6 +395,7 @@ impl Write for ByteBoxBuf {
     }
 }
 
+#[cfg(feature="asyncs")]
 pub struct ByteSteamBuf {
     ctx: crate::Context,
     buf: RwLock<ByteBoxBuf>,
@@ -403,6 +405,7 @@ pub struct ByteSteamBuf {
     wkr2: WakerFut,
 }
 
+#[cfg(feature="asyncs")]
 impl ByteSteamBuf {
     pub fn new(ctx: &crate::Context, max: usize, tmout: Duration) -> Self {
         let ctx = crate::Context::background(Some(ctx.clone()));

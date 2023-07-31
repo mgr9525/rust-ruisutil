@@ -173,6 +173,7 @@ pub fn send_msg_buf(
     Ok(())
 }
 
+#[cfg(feature="asyncs")]
 pub async fn parse_msg_async(
     ctxs: &super::Context,
     conn: &mut async_std::net::TcpStream,
@@ -226,6 +227,7 @@ pub async fn parse_msg_async(
     Ok(rt)
 }
 
+#[cfg(feature="asyncs")]
 pub async fn send_msg_async(
     ctxs: &super::Context,
     conn: &mut async_std::net::TcpStream,
@@ -263,6 +265,7 @@ pub async fn send_msg_async(
     Ok(())
 }
 
+#[cfg(feature="asyncs")]
 pub async fn send_msg_async_buf(
     ctxs: &super::Context,
     conn: &mut async_std::net::TcpStream,

@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.cargo.features": [
+        "all"
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "rust-analyzer.cargo.noDefaultFeatures": true
+}

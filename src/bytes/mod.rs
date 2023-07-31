@@ -1,5 +1,6 @@
 pub use bytes::ByteBox;
 pub use bytes::ByteBoxBuf;
+#[cfg(feature="asyncs")]
 pub use bytes::ByteSteamBuf;
 pub use circle::CircleBuf;
 pub use stream::*;

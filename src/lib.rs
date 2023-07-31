@@ -1,444 +1,28 @@
-extern crate async_std;
-extern crate chrono;
-extern crate md5;
-// extern crate rand;
-
-use async_std::prelude::*;
-use chrono::{Offset, TimeZone};
-// use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::{
-    error,
-    io::{self, Read, Write},
-    net,
     sync::{
         atomic::{AtomicBool, AtomicI32, Ordering},
         Arc,
     },
-    time::{self, Duration, SystemTime},
+    time::{self, Duration},
 };
 
 pub use contianer::ArcMut;
 pub use list::ListDequeMax;
 pub use timer::Timer;
+pub use utils::*;
 
 pub mod bytes;
 pub mod conf;
 mod contianer;
+#[cfg(feature = "filesplit")]
+pub mod filesplit;
 mod list;
+#[cfg(feature = "logs")]
+pub mod log;
 pub mod message;
 pub mod sync;
 mod timer;
-
-pub fn byte_2i(bts: &[u8]) -> i64 {
-    let mut rt = 0i64;
-    let mut i = bts.len();
-    for v in bts {
-        if i > 0 {
-            i -= 1;
-            rt |= (*v as i64) << (8 * i);
-        } else {
-            rt |= *v as i64;
-        }
-    }
-    rt
-}
-
-pub fn i2_byte(v: i64, n: usize) -> Box<[u8]> {
-    let mut rt: Vec<u8> = Vec::with_capacity(n);
-    // if n>4{return rt;}
-    for i in 0..n {
-        let k = n - i - 1;
-        if k > 0 {
-            rt.push((v >> (8 * k)) as u8);
-        } else {
-            rt.push(v as u8)
-        }
-    }
-    rt.into_boxed_slice()
-}
-
-pub fn ioerr<E>(s: E, kd: Option<io::ErrorKind>) -> io::Error
-where
-    E: Into<Box<dyn error::Error + Send + Sync>>,
-{
-    let mut kds = io::ErrorKind::Other;
-    if let Some(v) = kd {
-        kds = v;
-    }
-    io::Error::new(kds, s)
-}
-pub fn struct2byte<T: Sized>(p: &T) -> &[u8] {
-    unsafe { std::slice::from_raw_parts((p as *const T) as *const u8, std::mem::size_of::<T>()) }
-}
-pub fn byte2struct<T: Sized>(p: &mut T, bts: &[u8]) -> io::Result<usize> {
-    let ln = std::mem::size_of::<T>();
-    if ln > bts.len() {
-        return Err(ioerr("param err!", None));
-    }
-
-    unsafe {
-        let ptr = p as *mut T as *mut u8;
-        let tb = (&bts[..ln]).as_ptr();
-        std::ptr::copy_nonoverlapping(tb, ptr, ln);
-    };
-    Ok(ln)
-}
-
-pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Box<[u8]>> {
-    if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
-    }
-    let mut rn = 0usize;
-    let mut data = vec![0u8; ln];
-    while rn < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.read(&mut data[rn..]) {
-            Ok(n) => {
-                if n > 0 {
-                    rn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "read err!"));
-                }
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(data.into_boxed_slice())
-}
-pub fn tcp_write(ctx: &Context, stream: &mut net::TcpStream, bts: &[u8]) -> io::Result<usize> {
-    if bts.len() <= 0 {
-        return Ok(0);
-    }
-    if ctx.done() {
-        return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-    }
-    match stream.write(bts) {
-        Err(e) => Err(e),
-        Ok(n) => {
-            if n != bts.len() {
-                Err(ioerr(format!("send len err:{}/{}", n, bts.len()), None))
-            } else {
-                Ok(n)
-            }
-        }
-    }
-}
-
-pub async fn tcp_read_async(
-    ctx: &Context,
-    stream: &mut async_std::net::TcpStream,
-    ln: usize,
-) -> io::Result<Box<[u8]>> {
-    if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
-    }
-    let mut rn = 0usize;
-    let mut data = vec![0u8; ln];
-    while rn < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.read(&mut data[rn..]).await {
-            Ok(n) => {
-                if n > 0 {
-                    rn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("read err len:{}!", n),
-                    ));
-                }
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(data.into_boxed_slice())
-}
-pub async fn tcp_write_async(
-    ctx: &Context,
-    stream: &mut async_std::net::TcpStream,
-    bts: &[u8],
-) -> io::Result<usize> {
-    if bts.len() <= 0 {
-        return Ok(0);
-    }
-    let mut wn = 0usize;
-    while wn < bts.len() {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.write(&bts[wn..]).await {
-            Err(e) => return Err(e),
-            Ok(n) => {
-                if n > 0 {
-                    wn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
-                }
-            }
-        }
-    }
-    Ok(wn)
-}
-
-pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
-    ctx: &Context,
-    stream: &mut T,
-    ln: usize,
-) -> io::Result<Box<[u8]>> {
-    if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
-    }
-    let mut rn = 0usize;
-    let mut data = vec![0u8; ln];
-    while rn < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.read(&mut data[rn..]).await {
-            Ok(n) => {
-                if n > 0 {
-                    rn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("read err len:{}!", n),
-                    ));
-                }
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(data.into_boxed_slice())
-}
-pub async fn write_all_async<T: async_std::io::WriteExt + Unpin>(
-    ctx: &Context,
-    stream: &mut T,
-    bts: &[u8],
-) -> io::Result<usize> {
-    if bts.len() <= 0 {
-        return Ok(0);
-    }
-    let mut wn = 0usize;
-    while wn < bts.len() {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.write(&bts[wn..]).await {
-            Err(e) => return Err(e),
-            Ok(n) => {
-                if n > 0 {
-                    wn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
-                }
-            }
-        }
-    }
-    Ok(wn)
-}
-
-pub fn env(key: &str) -> Option<String> {
-    match std::env::var(key) {
-        Err(_) => None,
-        Ok(v) => Some(v),
-    }
-}
-pub fn envs(key: &str, defs: &str) -> String {
-    match env(key) {
-        None => String::from(defs),
-        Some(vs) => {
-            if vs.is_empty() {
-                String::from(defs)
-            } else {
-                vs
-            }
-        }
-    }
-}
-pub fn envi(key: &str, defs: i64) -> i64 {
-    match env(key) {
-        None => defs,
-        Some(vs) => match vs.parse::<i64>() {
-            Ok(v) => v,
-            Err(_) => defs,
-        },
-    }
-}
-
-pub fn print_hex(data: &[u8]) {
-    if data.len() <= 0 {
-        return;
-    }
-    print!("{:02x}", data[0]);
-    for i in 1..data.len() {
-        print!(" {:02x}", data[i]);
-    }
-}
-pub fn sprint_hex(data: &[u8], splts: &str) -> String {
-    let mut rts = String::new();
-    if data.len() > 0 {
-        rts += format!("{:02x}", data[0]).as_str();
-        for i in 1..data.len() {
-            rts += format!("{}{:02x}", splts, data[i]).as_str();
-        }
-    }
-    rts
-}
-pub fn sprints_hex(data: &[u8], mut ln: usize, splts: &str) -> String {
-    let mut rts = String::new();
-    if data.len() > 0 {
-        if ln <= 0 || ln > data.len() {
-            ln = data.len();
-        }
-        rts += format!("{:02x}", data[0]).as_str();
-        for i in 1..ln {
-            rts += format!("{}{:02x}", splts, data[i]).as_str();
-        }
-    }
-    rts
-}
-pub fn md5str<S: Into<String>>(input: S) -> String {
-    let ms = md5::compute(input.into().as_bytes());
-    format!("{:x}", ms)
-}
-pub fn md5strs<S: AsRef<[u8]>>(input: S) -> String {
-    let ms = md5::compute(input);
-    format!("{:x}", ms)
-}
-
-pub fn times() -> (Duration, i8) {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => (n, 1),
-        Err(_) => match SystemTime::UNIX_EPOCH.duration_since(SystemTime::now()) {
-            Ok(n) => (n, 0),
-            Err(_) => (Duration::default(), -1),
-        },
-    }
-}
-pub fn randtms() -> u32 {
-    let (tms, _) = times();
-    (tms.as_nanos() & 0xffffffff) as u32
-}
-
-pub fn randtms_ang(a: u32, b: u32) -> u32 {
-    if b <= 0 || a > b {
-        return 0;
-    }
-    let mut rds = randtms();
-    if rds > b {
-        rds %= b;
-    }
-    while rds != 0 {
-        if rds > b {
-            rds /= 2;
-        } else if rds < a {
-            rds = rds * 2 + 1;
-        } else {
-            break;
-        }
-    }
-    rds
-}
-/* pub fn rands<T>() -> T
-where
-    Standard: Distribution<T>,
-{
-    let mut rng = rand::thread_rng();
-    rng.gen()
-}
-pub fn randgs(a: i32, b: i32) -> i32 {
-    let mut rng = rand::thread_rng();
-    rng.gen_range(a..b)
-} */
-pub fn randoms() -> String {
-    randtms().to_string()
-}
-pub fn random(ln: usize) -> String {
-    let mut res = String::new();
-    if ln <= 0 {
-        return res;
-    }
-    const BS: &[u8] = b"0123456789AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
-    for _ in 0..ln {
-        let i = randtms_ang(0, BS.len() as u32);
-        res.push(BS[i as usize] as char);
-    }
-    res
-}
-pub fn strftime<T>(dt: T, s: &str) -> String
-where
-    T: Into<chrono::DateTime<chrono::Local>>,
-{
-    format!("{}", dt.into().format(s))
-}
-pub fn strftime_off<T>(dt: T, s: &str, hour: i32) -> String
-where
-    T: Into<chrono::DateTime<chrono::Utc>>,
-{
-    if let Some(v) = chrono::FixedOffset::east_opt(hour * 3600) {
-        let tm: chrono::DateTime<chrono::Utc> = dt.into();
-        let tme = tm.with_timezone(&v);
-        format!("{}", tme.format(s))
-    } else {
-        "ErrHour".to_string()
-    }
-}
-pub fn strftime_utc<T>(dt: T, s: &str) -> String
-where
-    T: Into<chrono::DateTime<chrono::Utc>>,
-{
-    format!("{}", dt.into().format(s))
-}
-pub fn strptime(t: &str, s: &str) -> io::Result<SystemTime> {
-    match chrono::DateTime::parse_from_str(t, s) {
-        Ok(v) => Ok(SystemTime::from(v)),
-        Err(e) => Err(crate::ioerr(format!("parse {} err:{}", t, e), None)),
-    }
-}
-pub fn strptime_off(t: &str, s: &str, hour: i32) -> io::Result<SystemTime> {
-    match chrono::FixedOffset::east_opt(hour * 3600) {
-        None => Err(crate::ioerr(format!("timezone offset {} err", hour), None)),
-        Some(fot) => match chrono::DateTime::parse_from_str(t, s) {
-            Ok(v) => Ok(SystemTime::from(v)),
-            Err(_) => match chrono::NaiveDateTime::parse_from_str(t, s) {
-                Ok(nvt) => {
-                    let tme = match fot.from_local_datetime(&nvt) {
-                        chrono::LocalResult::None => {
-                            return Err(crate::ioerr("local tm nil", None))
-                        }
-                        chrono::LocalResult::Single(v) => v,
-                        chrono::LocalResult::Ambiguous(v, e) => {
-                            return Err(crate::ioerr("local tm err", None))
-                        }
-                    };
-                    Ok(SystemTime::from(tme))
-                }
-                Err(e) => Err(crate::ioerr(format!("parse {} err:{}", t, e), None)),
-            },
-        },
-    }
-    /* if date.offset().fix().local_minus_utc() == 0 {
-        println!("------test:{} in utc", t);
-        if let Some(v) = chrono::FixedOffset::east_opt(hour * 3600) {
-            let tme = date.with_timezone(&v);
-            return Ok(SystemTime::from(tme));
-        }
-    } */
-    // Err(crate::ioerr(format!("parse {} err:{}", t, s), None))
-}
+mod utils;
 
 #[derive(Clone)]
 pub struct Context {
@@ -533,6 +117,7 @@ impl WaitGroup {
             }
         }
     }
+    #[cfg(feature = "asyncs")]
     pub async fn waits(&self, ctxs: Option<Context>) {
         loop {
             if let Some(v) = &ctxs {
@@ -575,8 +160,6 @@ impl Clone for WaitGroup {
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, SystemTime};
-
-    use async_std::task;
 
     use crate::{bytes::CircleBuf, conf::KVConfig, ArcMut, Context};
 
@@ -748,19 +331,20 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "asyncs")]
     #[test]
     fn wgs() {
         let wgt = crate::WaitGroup::new();
         let wgtcg = wgt.clone();
-        task::block_on(async move {
+        async_std::task::block_on(async move {
             let wg = crate::WaitGroup::new();
             let wgc = wg.clone();
             let wgtc = wgtcg.clone();
-            task::spawn(async move {
+            async_std::task::spawn(async move {
                 let mut n = 0;
                 while n < 30 * 100 * 2 {
                     n += 1;
-                    task::sleep(Duration::from_millis(5)).await;
+                    async_std::task::sleep(Duration::from_millis(5)).await;
                 }
                 println!("task end1!!!!");
                 std::mem::drop(wgc);
@@ -768,11 +352,11 @@ mod tests {
             });
             let wgc = wg.clone();
             let wgtc = wgtcg.clone();
-            task::spawn(async move {
+            async_std::task::spawn(async move {
                 let mut n = 0;
                 while n < 40 * 100 * 2 {
                     n += 1;
-                    task::sleep(Duration::from_millis(5)).await;
+                    async_std::task::sleep(Duration::from_millis(5)).await;
                 }
                 println!("task end2!!!!");
                 std::mem::drop(wgc);
@@ -816,5 +400,63 @@ mod tests {
     #[test]
     fn hex() {
         crate::print_hex(&vec![0xaa, 0xb3, 0x0a, 0x0c, 0x00]);
+    }
+
+    #[test]
+    fn filesplits() {
+        let cfg = crate::filesplit::Config {
+            flpath: "/mnt/e/wslData/programs/rust/rust-ruisutil/test/ruisutil.log".to_string(),
+            flsize: 1,
+            flcount: 5,
+            ..Default::default()
+        };
+        println!("------00000000:pth={}", &cfg.flpath);
+        let ctx = Context::background(None);
+        let flspt = crate::filesplit::FileSpliter::new(&ctx, cfg);
+        let flsptc = flspt.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = flsptc.run() {
+                println!("flsptc.run err:{}", e)
+            }
+        });
+        for i in 0..1000 {
+            flspt.pushs(&format!("hello world:{}\n", i));
+            std::thread::sleep(Duration::from_millis(20));
+            flspt.pushs("11111\n");
+            std::thread::sleep(Duration::from_millis(20));
+            flspt.pushs("22222\n");
+            std::thread::sleep(Duration::from_millis(20));
+            flspt.pushs("3333\n");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn logs() {
+        let cfg = crate::filesplit::Config {
+            flpath: "/mnt/e/wslData/programs/rust/rust-ruisutil/test/ruisutils.log".to_string(),
+            flsize: 1,
+            flcount: 5,
+            ..Default::default()
+        };
+        println!("------00000000:pth={}", &cfg.flpath);
+        let ctx = Context::background(None);
+        let mut lg = crate::log::Logger::new(&ctx, cfg);
+        lg.level(log::Level::Debug).timezone(10).show_file_info().show_module();
+        if let Err(e) = lg.start() {
+            println!("log start err:{}", e);
+            return;
+        }
+        println!("------1111111");
+        for i in 0..1000 {
+            log::info!("hello world:{}", i);
+            std::thread::sleep(Duration::from_millis(20));
+            log::debug!("11111");
+            std::thread::sleep(Duration::from_millis(20));
+            log::error!("22222");
+            std::thread::sleep(Duration::from_millis(20));
+            log::warn!("3333");
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }

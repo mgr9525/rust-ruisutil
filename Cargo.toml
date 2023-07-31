@@ -8,5 +8,15 @@ edition = "2018"
 [dependencies]
 md5 = "0.7.0"
 # rand = "0.8.4"
-chrono = "0.4.19"
-async-std = "1.*"
+log = {version="0.4.*", features = ["std"], optional = true}
+chrono = {version="0.4.19", optional = true}
+async-std = {version="1.*", optional = true}
+
+[features]
+# default=["asyncs","times"]
+all=["asyncs","times","logs","filesplit"]
+asyncs=["async-std"]
+times=["chrono"]
+logs=["log","filesplit","times"]
+filesplit=[]
+mini=[]
