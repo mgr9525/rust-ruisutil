@@ -9,6 +9,8 @@ use std::{
     time::Duration,
 };
 
+use crate::bytes::ByteBox;
+
 #[derive(Clone)]
 pub struct FileSpliter {
     inner: crate::ArcMut<Inner>,
@@ -22,7 +24,7 @@ pub struct Config {
 struct Inner {
     ctx: crate::Context,
     cfg: Config,
-    buf: Mutex<crate::ListDequeMax<Box<[u8]>>>,
+    buf: Mutex<crate::ListDequeMax<ByteBox>>,
     wkr: crate::sync::Waker,
     flfd: Mutex<Option<File>>,
     flln: AtomicUsize,
@@ -216,22 +218,16 @@ impl FileSpliter {
     }
 
     pub fn push(&self, bts: &[u8]) {
-        if let Ok(mut lkv) = self.inner.buf.lock() {
-            lkv.push(bts.to_vec().into_boxed_slice());
-            self.inner.wkr.notify_all();
-        }
+        self.pushbox(bts.to_vec());
     }
-    pub fn pushbox(&self, bts: Box<[u8]>) {
+    pub fn pushbox<T: Into<ByteBox>>(&self, bts: T) {
         if let Ok(mut lkv) = self.inner.buf.lock() {
-            lkv.push(bts);
+            lkv.push(bts.into());
             self.inner.wkr.notify_all();
         }
     }
     pub fn pushs(&self, conts: &str) {
-        if let Ok(mut lkv) = self.inner.buf.lock() {
-            lkv.push(conts.as_bytes().to_vec().into_boxed_slice());
-            self.inner.wkr.notify_all();
-        }
+        self.push(conts.as_bytes());
     }
     pub fn flush(&self) {
         if let Ok(mut lkv) = self.inner.flfd.lock() {
