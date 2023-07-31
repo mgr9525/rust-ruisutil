@@ -78,12 +78,12 @@ impl FileSpliter {
             if pth.exists() && pth.is_dir() {
                 return Err(crate::ioerr("file path is err", None));
             }
-            if let Some(o) = pth.parent() {
+            /* if let Some(o) = pth.parent() {
                 if o.exists() && !o.is_dir() {
                     return Err(crate::ioerr("file path is err", None));
                 }
                 std::fs::create_dir_all(o);
-            }
+            } */
         }
         while !self.inner.ctx.done() {
             let out = {
@@ -156,6 +156,13 @@ impl FileSpliter {
             }
             None => {
                 let pth = self.inner.cfg.flpath.as_str();
+                let pths = Path::new(self.inner.cfg.flpath.as_str());
+                if let Some(o) = pths.parent() {
+                    if o.exists() && !o.is_dir() {
+                        return Err(crate::ioerr("file path is err", None));
+                    }
+                    std::fs::create_dir_all(o);
+                }
                 let sz = match std::fs::metadata(pth) {
                     Ok(v) => v.len(),
                     Err(_e) => 0,
