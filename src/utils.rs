@@ -173,6 +173,32 @@ pub async fn tcp_write_async(
     Ok(wn)
 }
 
+use crate::bytes;
+use std::sync::Arc;
+#[cfg(feature = "asyncs")]
+pub async fn read_allbuf_async<T: async_std::io::ReadExt + Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    mut ln: usize,
+) -> io::Result<bytes::ByteBoxBuf> {
+    let mut buf = bytes::ByteBoxBuf::new();
+    if ln <= 0 {
+        ln = 1024 * 5;
+    }
+    loop {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        let mut data = vec![0u8; ln].into_boxed_slice();
+        let n = stream.read(&mut data[..]).await?;
+        if n <= 0 {
+            break;
+        }
+        buf.pushs(Arc::new(data), 0, n);
+    }
+
+    Ok(buf)
+}
 #[cfg(feature = "asyncs")]
 pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
     ctx: &Context,
@@ -196,7 +222,7 @@ pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
                     // let bts=&data[..];
                     // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
                     return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                        io::ErrorKind::UnexpectedEof,
                         format!("read err len:{}!", n),
                     ));
                 }
@@ -333,6 +359,22 @@ pub fn md5strs<S: AsRef<[u8]>>(input: S) -> String {
     let ms = md5::compute(input);
     format!("{:x}", ms)
 }
+#[cfg(feature = "sha1")]
+pub fn sha1str<S: Into<String>>(input: S) -> String {
+    use crypto::digest::Digest;
+    let mut hld = crypto::sha1::Sha1::new();
+    hld.input(input.into().as_bytes());
+    hld.result_str()
+}
+#[cfg(feature = "sha1")]
+pub fn sha1strs<S: AsRef<[u8]>>(input: S) -> String {
+    use crypto::digest::Digest;
+    let mut hld = crypto::sha1::Sha1::new();
+    hld.input(input.as_ref());
+    hld.result_str()
+}
+#[cfg(feature = "sha1")]
+pub use crypto::sha1::Sha1 as CryptoSha1;
 
 pub fn times() -> (Duration, i8) {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
