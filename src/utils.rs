@@ -179,17 +179,17 @@ use std::sync::Arc;
 pub async fn read_allbuf_async<T: async_std::io::ReadExt + Unpin>(
     ctx: &Context,
     stream: &mut T,
-    mut ln: usize,
+    mut eln: usize,
 ) -> io::Result<bytes::ByteBoxBuf> {
     let mut buf = bytes::ByteBoxBuf::new();
-    if ln <= 0 {
-        ln = 1024 * 5;
+    if eln <= 0 {
+      eln = 1024 * 5;
     }
     loop {
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        let mut data = vec![0u8; ln].into_boxed_slice();
+        let mut data = vec![0u8; eln].into_boxed_slice();
         let n = stream.read(&mut data[..]).await?;
         if n <= 0 {
             break;
