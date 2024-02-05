@@ -375,6 +375,8 @@ pub fn sha1strs<S: AsRef<[u8]>>(input: S) -> String {
 }
 #[cfg(feature = "sha1")]
 pub use crypto::sha1::Sha1 as CryptoSha1;
+#[cfg(feature = "sha1")]
+pub use crypto::digest::Digest as CryptoDigest;
 
 pub fn times() -> (Duration, i8) {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
