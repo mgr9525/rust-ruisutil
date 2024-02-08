@@ -76,6 +76,13 @@ impl Context {
         }
         self.inner.doned.load(Ordering::SeqCst)
     }
+    pub fn done_err(&self) -> std::io::Result<()> {
+        if self.done() {
+            Err(ioerr("ctx end", Some(std::io::ErrorKind::Interrupted)))
+        } else {
+            Ok(())
+        }
+    }
 
     pub fn stop(&self) -> bool {
         self.inner.doned.store(true, Ordering::SeqCst);
