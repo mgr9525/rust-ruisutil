@@ -183,7 +183,7 @@ pub async fn read_allbuf_async<T: async_std::io::ReadExt + Unpin>(
 ) -> io::Result<bytes::ByteBoxBuf> {
     let mut buf = bytes::ByteBoxBuf::new();
     if eln <= 0 {
-      eln = 1024 * 5;
+        eln = 1024 * 5;
     }
     loop {
         if ctx.done() {
@@ -262,6 +262,61 @@ pub async fn write_all_async<T: async_std::io::WriteExt + Unpin>(
     Ok(wn)
 }
 
+pub fn read_allbuf<T: std::io::Read>(
+    ctx: &Context,
+    stream: &mut T,
+    mut eln: usize,
+) -> io::Result<bytes::ByteBoxBuf> {
+    let mut buf = bytes::ByteBoxBuf::new();
+    if eln <= 0 {
+        eln = 1024 * 5;
+    }
+    loop {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        let mut data = vec![0u8; eln].into_boxed_slice();
+        let n = stream.read(&mut data[..])?;
+        if n <= 0 {
+            break;
+        }
+        buf.pushs(Arc::new(data), 0, n);
+    }
+
+    Ok(buf)
+}
+pub fn read_all<T: std::io::Read>(
+    ctx: &Context,
+    stream: &mut T,
+    ln: usize,
+) -> io::Result<Box<[u8]>> {
+    if ln <= 0 {
+        return Ok(Box::new([0u8; 0]));
+    }
+    let mut rn = 0usize;
+    let mut data = vec![0u8; ln];
+    while rn < ln {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.read(&mut data[rn..]) {
+            Ok(n) => {
+                if n > 0 {
+                    rn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("read err len:{}!", n),
+                    ));
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(data.into_boxed_slice())
+}
 pub fn write_all<T: std::io::Write>(
     ctx: &Context,
     stream: &mut T,
@@ -374,9 +429,9 @@ pub fn sha1strs<S: AsRef<[u8]>>(input: S) -> String {
     hld.result_str()
 }
 #[cfg(feature = "sha1")]
-pub use crypto::sha1::Sha1 as CryptoSha1;
-#[cfg(feature = "sha1")]
 pub use crypto::digest::Digest as CryptoDigest;
+#[cfg(feature = "sha1")]
+pub use crypto::sha1::Sha1 as CryptoSha1;
 
 pub fn times() -> (Duration, i8) {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
