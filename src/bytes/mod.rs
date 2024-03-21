@@ -9,7 +9,7 @@ mod bytes;
 mod circle;
 mod stream;
 
-pub fn conv_human_readable(sz: usize) -> String {
+pub fn conv_human_readable(sz: u64) -> String {
     let szf = sz as f64;
     if sz >= 1024 * 1024 * 1024 {
         return format!("{:.2}GB", szf / 1024f64 / 1024f64 / 1024f64);
