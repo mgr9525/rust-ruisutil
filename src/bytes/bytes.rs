@@ -38,7 +38,7 @@ impl ByteBox {
     pub fn news(dt: Box<[u8]>, start: usize, end: usize) -> Self {
         Self {
             start: start,
-            end: if end > 0 { end } else { dt.len() },
+            end: end,
             data: Arc::new(dt),
         }
     }

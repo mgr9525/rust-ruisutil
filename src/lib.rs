@@ -111,9 +111,9 @@ impl WaitGroup {
             }),
         }
     }
-    pub fn wait(&self, ctxs: Option<Context>) {
+    pub fn wait(&self, ctxs: Option<&Context>) {
         loop {
-            if let Some(v) = &ctxs {
+            if let Some(v) = ctxs {
                 if v.done() {
                     break;
                 }
@@ -125,9 +125,9 @@ impl WaitGroup {
         }
     }
     #[cfg(feature = "asyncs")]
-    pub async fn waits(&self, ctxs: Option<Context>) {
+    pub async fn waits(&self, ctxs: Option<&Context>) {
         loop {
-            if let Some(v) = &ctxs {
+            if let Some(v) = ctxs {
                 if v.done() {
                     break;
                 }
