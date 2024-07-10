@@ -12,11 +12,14 @@ rust-crypto = {version="0.2.36", optional = true}
 log = {version="0.4.*", features = ["std"], optional = true}
 chrono = {version="0.4.19", optional = true}
 async-std = {version="1.*", optional = true}
+tokio = { version = "1.*", features = ["full"], optional = true }
 
 [features]
 # default=["asyncs","times"]
 all=["asyncs","times","logs","filesplit","cryptos"]
+alltk=["tokios","times","logs","filesplit","cryptos"]
 asyncs=["async-std"]
+tokios=["tokio"]
 times=["chrono"]
 logs=["log","filesplit","times"]
 cryptos=["sha1"]

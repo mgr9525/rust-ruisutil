@@ -167,7 +167,8 @@ pub fn send_msg_buf(
         super::tcp_write(ctxs, conn, &v[..])?;
     }
     if let Some(v) = &bds {
-        bytes::tcp_write(ctxs, conn, &*v)?;
+        let bts=v.to_byte_box();
+        super::tcp_write(ctxs, conn, &bts)?;
     }
     super::tcp_write(ctxs, conn, &[0x8eu8, 0x8fu8])?;
     Ok(())
@@ -297,7 +298,8 @@ pub async fn send_msg_async_buf(
         super::tcp_write_async(ctxs, conn, &v[..]).await?;
     }
     if let Some(v) = &bds {
-        bytes::tcp_write_async(ctxs, conn, &*v).await?;
+        let bts=v.to_byte_box();
+        super::tcp_write_async(ctxs, conn, &bts).await?;
     }
     super::tcp_write_async(ctxs, conn, &[0x8eu8, 0x8fu8]).await?;
     Ok(())

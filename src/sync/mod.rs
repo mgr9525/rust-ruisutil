@@ -41,6 +41,8 @@ mod tests {
             println!("end wait2");
         }
     }
+    
+    #[cfg(feature = "asyncs")]
     #[test]
     fn waker_fut() {
         async_std::task::block_on(async move {

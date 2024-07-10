@@ -262,6 +262,94 @@ pub async fn write_all_async<T: async_std::io::WriteExt + Unpin>(
     Ok(wn)
 }
 
+
+#[cfg(feature = "tokios")]
+pub async fn read_allbuf_async<T: tokio::io::AsyncReadExt + Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    mut eln: usize,
+) -> io::Result<bytes::ByteBoxBuf> {
+    let mut buf = bytes::ByteBoxBuf::new();
+    if eln <= 0 {
+        eln = 1024 * 5;
+    }
+    loop {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        let mut data = vec![0u8; eln].into_boxed_slice();
+        let n = stream.read(&mut data[..]).await?;
+        if n <= 0 {
+            break;
+        }
+        buf.pushs(Arc::new(data), 0, n);
+    }
+
+    Ok(buf)
+}
+#[cfg(feature = "tokios")]
+pub async fn read_all_async<T: tokio::io::AsyncReadExt + Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    ln: usize,
+) -> io::Result<Box<[u8]>> {
+    if ln <= 0 {
+        return Ok(Box::new([0u8; 0]));
+    }
+    let mut rn = 0usize;
+    let mut data = vec![0u8; ln];
+    while rn < ln {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.read(&mut data[rn..]).await {
+            Ok(n) => {
+                if n > 0 {
+                    rn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("read err len:{}!", n),
+                    ));
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(data.into_boxed_slice())
+}
+#[cfg(feature = "tokios")]
+pub async fn write_all_async<T: tokio::io::AsyncWriteExt + Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    bts: &[u8],
+) -> io::Result<usize> {
+    if bts.len() <= 0 {
+        return Ok(0);
+    }
+    let mut wn = 0usize;
+    while wn < bts.len() {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match stream.write(&bts[wn..]).await {
+            Err(e) => return Err(e),
+            Ok(n) => {
+                if n > 0 {
+                    wn += n;
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+                }
+            }
+        }
+    }
+    Ok(wn)
+}
+
 pub fn read_allbuf<T: std::io::Read>(
     ctx: &Context,
     stream: &mut T,
