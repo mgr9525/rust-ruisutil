@@ -43,12 +43,12 @@ where
         )),
     }
 }
-pub fn tcp_shutdownw(conn: &mut net::TcpStream) -> std::io::Result<()> {
+/* pub fn tcp_shutdownw(conn: &mut net::TcpStream) -> std::io::Result<()> {
     let rtm = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     rtm.block_on(async { conn.shutdown().await })
-}
+} */
 pub async fn tcp_shutdownw_ac(conn: &mut net::TcpStream) -> std::io::Result<()> {
     conn.shutdown().await
 }

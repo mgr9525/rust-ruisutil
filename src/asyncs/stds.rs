@@ -36,9 +36,9 @@ where
     timeout(duration, future).await
 }
 
-pub fn tcp_shutdownw(conn: &mut net::TcpStream) -> std::io::Result<()> {
+/* pub fn tcp_shutdownw(conn: &mut net::TcpStream) -> std::io::Result<()> {
     conn.shutdown(std::net::Shutdown::Write)
-}
+} */
 pub async fn tcp_shutdownw_ac(conn: &mut net::TcpStream) -> std::io::Result<()> {
     conn.shutdown(std::net::Shutdown::Write)
 }
