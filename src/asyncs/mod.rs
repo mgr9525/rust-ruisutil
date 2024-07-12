@@ -12,3 +12,7 @@ mod tkos;
 pub use stds::*;
 #[cfg(feature = "tokios")]
 pub use tkos::*;
+
+pub use core::future::Future;
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
+

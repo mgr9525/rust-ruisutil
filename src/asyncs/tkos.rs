@@ -1,6 +1,7 @@
 #[cfg(feature = "tokios")]
 pub use tokio;
 
+pub use tokio::fs;
 pub use tokio::net;
 pub use tokio::sync;
 pub use tokio::task;
@@ -16,6 +17,16 @@ pub fn current_block_on<F: core::future::Future>(future: F) -> std::io::Result<F
         .enable_all()
         .build()?;
     Ok(rtm.block_on(future))
+}
+pub async fn spawn_blocking_io<F, T>(f: F) -> std::io::Result<T>
+where
+    F: FnOnce() -> std::io::Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    match task::spawn_blocking(f).await {
+        Ok(v) => v,
+        Err(e) => Err(crate::ioerr("tokio join err", None)),
+    }
 }
 pub async fn sleep(dur: std::time::Duration) {
     tokio::time::sleep(dur).await

@@ -1,6 +1,7 @@
 #[cfg(feature = "asyncs")]
 pub use async_std;
 
+pub use async_std::fs;
 pub use async_std::net;
 pub use async_std::sync;
 pub use async_std::task;
@@ -13,6 +14,13 @@ pub use async_std::io::WriteExt as AsyncWriteExt;
 
 pub fn current_block_on<F: core::future::Future>(future: F) -> std::io::Result<F::Output> {
     Ok(task::block_on(future))
+}
+pub async fn spawn_blocking_io<F, T>(f: F) -> std::io::Result<T>
+where
+    F: FnOnce() -> std::io::Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    task::spawn_blocking(f).await
 }
 pub async fn sleep(dur: std::time::Duration) {
     async_std::task::sleep(dur).await
