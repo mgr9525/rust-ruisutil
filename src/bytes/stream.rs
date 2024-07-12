@@ -4,12 +4,9 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature = "asyncs")]
-use async_std::sync::RwLock;
-#[cfg(feature = "tokios")]
-use tokio::sync::RwLock;
+use asyncs::sync::RwLock;
 
-use crate::sync::WakerFut;
+use crate::{asyncs, sync::WakerFut};
 
 use super::{ByteBox, ByteBoxBuf};
 
@@ -50,10 +47,7 @@ impl ByteSteamBuf {
                 break;
             }
             std::mem::drop(lkv);
-            #[cfg(feature = "asyncs")]
-            async_std::io::timeout(Duration::from_millis(200), self.wkr1.clone()).await;
-            #[cfg(feature = "tokios")]
-            tokio::time::timeout(Duration::from_millis(200), self.wkr1.clone()).await;
+            asyncs::timeout(Duration::from_millis(200), self.wkr1.clone()).await;
         }
     }
     pub async fn clear(&self) {
@@ -83,10 +77,7 @@ impl ByteSteamBuf {
                 }
                 std::mem::drop(lkv);
                 // self.wkr1.wait_timeout(self.tmout.clone());
-                #[cfg(feature = "asyncs")]
-                async_std::io::timeout(self.tmout.clone(), self.wkr1.clone()).await;
-                #[cfg(feature = "tokios")]
-                tokio::time::timeout(self.tmout.clone(), self.wkr1.clone()).await;
+                asyncs::timeout(self.tmout.clone(), self.wkr1.clone()).await;
                 // self.wkr1.notify_all();
             }
         }
@@ -103,10 +94,7 @@ impl ByteSteamBuf {
             }
             std::mem::drop(lkv);
             // self.wkr2.wait_timeout(self.tmout.clone());
-            #[cfg(feature = "asyncs")]
-            async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
-            #[cfg(feature = "tokios")]
-            tokio::time::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+            asyncs::timeout(self.tmout.clone(), self.wkr2.clone()).await;
             // self.wkr2.notify_all();
         }
         let mut lkv = self.buf.write().await;
@@ -138,10 +126,7 @@ impl ByteSteamBuf {
             }
             std::mem::drop(lkv);
             // self.wkr2.wait_timeout(self.tmout.clone());
-            #[cfg(feature = "asyncs")]
-            async_std::io::timeout(self.tmout.clone(), self.wkr2.clone()).await;
-            #[cfg(feature = "tokios")]
-            tokio::time::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+            asyncs::timeout(self.tmout.clone(), self.wkr2.clone()).await;
         }
         let mut lkv = self.buf.write().await;
         lkv.cut_front(sz)

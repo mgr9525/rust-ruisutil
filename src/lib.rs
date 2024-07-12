@@ -11,6 +11,7 @@ pub use list::ListDequeMax;
 pub use timer::Timer;
 pub use utils::*;
 
+pub mod asyncs;
 pub mod bytes;
 pub mod conf;
 mod contianer;
@@ -19,7 +20,7 @@ pub mod filesplit;
 mod list;
 #[cfg(feature = "logs")]
 pub mod log;
-pub mod message;
+// pub mod message;
 pub mod sync;
 mod timer;
 mod utils;
@@ -124,7 +125,6 @@ impl WaitGroup {
             }
         }
     }
-    #[cfg(feature = "asyncs")]
     pub async fn waits(&self, ctxs: Option<&Context>) {
         loop {
             if let Some(v) = ctxs {
@@ -132,7 +132,8 @@ impl WaitGroup {
                     break;
                 }
             }
-            async_std::io::timeout(Duration::from_millis(100), self.inner.wkr2.clone()).await;
+            asyncs::timeout(Duration::from_millis(100), self.inner.wkr2.clone()).await;
+            // async_std::io::timeout(Duration::from_millis(100), self.inner.wkr2.clone()).await;
             if self.done() {
                 break;
             }

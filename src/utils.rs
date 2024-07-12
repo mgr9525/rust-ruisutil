@@ -1,5 +1,5 @@
-#[cfg(feature = "asyncs")]
-use async_std::io::{ReadExt, WriteExt};
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+use crate::asyncs::{self, AsyncReadExt, AsyncWriteExt};
 #[cfg(feature = "chrono")]
 use chrono::TimeZone;
 use std::{
@@ -110,73 +110,54 @@ pub fn tcp_write(ctx: &Context, stream: &mut net::TcpStream, bts: &[u8]) -> io::
     }
 }
 
-#[cfg(feature = "asyncs")]
-pub async fn tcp_read_async(
-    ctx: &Context,
-    stream: &mut async_std::net::TcpStream,
-    ln: usize,
-) -> io::Result<Box<[u8]>> {
-    if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
-    }
-    let mut rn = 0usize;
-    let mut data = vec![0u8; ln];
-    while rn < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.read(&mut data[rn..]).await {
-            Ok(n) => {
-                if n > 0 {
-                    rn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("read err len:{}!", n),
-                    ));
-                }
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(data.into_boxed_slice())
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn fut_tmout_ctxend0<F, T>(ctx: &Context, future: F) -> std::io::Result<T>
+where
+    F: core::future::Future<Output = std::io::Result<T>>,
+{
+    fut_tmout_ctxends(ctx, 0, Box::pin(future)).await
 }
-#[cfg(feature = "asyncs")]
-pub async fn tcp_write_async(
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn fut_tmout_ctxend<F, T>(ctx: &Context, secs: u64, future: F) -> std::io::Result<T>
+where
+    F: core::future::Future<Output = std::io::Result<T>>,
+{
+    fut_tmout_ctxends(ctx, secs, Box::pin(future)).await
+}
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn fut_tmout_ctxends<F, T>(
     ctx: &Context,
-    stream: &mut async_std::net::TcpStream,
-    bts: &[u8],
-) -> io::Result<usize> {
-    if bts.len() <= 0 {
-        return Ok(0);
+    mut secs: u64,
+    mut future: std::pin::Pin<Box<F>>,
+) -> std::io::Result<T>
+where
+    F: core::future::Future<Output = std::io::Result<T>>,
+{
+    if secs < 3 {
+        secs = 3;
     }
-    let mut wn = 0usize;
-    while wn < bts.len() {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.write(&bts[wn..]).await {
-            Err(e) => return Err(e),
-            Ok(n) => {
-                if n > 0 {
-                    wn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+    let drt = Duration::from_secs(secs);
+    while !ctx.done() {
+        match crate::asyncs::timeouts(drt, &mut future).await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::TimedOut {
+                    return Err(e);
                 }
             }
         }
     }
-    Ok(wn)
+    Err(crate::ioerr(
+        "ctx end",
+        Some(std::io::ErrorKind::Interrupted),
+    ))
 }
 
 use crate::bytes;
 use std::sync::Arc;
-#[cfg(feature = "asyncs")]
-pub async fn read_allbuf_async<T: async_std::io::ReadExt + Unpin>(
+
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
     ctx: &Context,
     stream: &mut T,
     mut eln: usize,
@@ -190,7 +171,7 @@ pub async fn read_allbuf_async<T: async_std::io::ReadExt + Unpin>(
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
         let mut data = vec![0u8; eln].into_boxed_slice();
-        let n = stream.read(&mut data[..]).await?;
+        let n = fut_tmout_ctxend0(ctx, stream.read(&mut data[..])).await?;
         if n <= 0 {
             break;
         }
@@ -199,8 +180,9 @@ pub async fn read_allbuf_async<T: async_std::io::ReadExt + Unpin>(
 
     Ok(buf)
 }
-#[cfg(feature = "asyncs")]
-pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
+
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
     ctx: &Context,
     stream: &mut T,
     ln: usize,
@@ -214,7 +196,7 @@ pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        match stream.read(&mut data[rn..]).await {
+        match fut_tmout_ctxend0(ctx, stream.read(&mut data[rn..])).await {
             Ok(n) => {
                 if n > 0 {
                     rn += n;
@@ -232,8 +214,9 @@ pub async fn read_all_async<T: async_std::io::ReadExt + Unpin>(
     }
     Ok(data.into_boxed_slice())
 }
-#[cfg(feature = "asyncs")]
-pub async fn write_all_async<T: async_std::io::WriteExt + Unpin>(
+
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
     ctx: &Context,
     stream: &mut T,
     bts: &[u8],
@@ -246,95 +229,7 @@ pub async fn write_all_async<T: async_std::io::WriteExt + Unpin>(
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        match stream.write(&bts[wn..]).await {
-            Err(e) => return Err(e),
-            Ok(n) => {
-                if n > 0 {
-                    wn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
-                }
-            }
-        }
-    }
-    Ok(wn)
-}
-
-
-#[cfg(feature = "tokios")]
-pub async fn read_allbuf_async<T: tokio::io::AsyncReadExt + Unpin>(
-    ctx: &Context,
-    stream: &mut T,
-    mut eln: usize,
-) -> io::Result<bytes::ByteBoxBuf> {
-    let mut buf = bytes::ByteBoxBuf::new();
-    if eln <= 0 {
-        eln = 1024 * 5;
-    }
-    loop {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        let mut data = vec![0u8; eln].into_boxed_slice();
-        let n = stream.read(&mut data[..]).await?;
-        if n <= 0 {
-            break;
-        }
-        buf.pushs(Arc::new(data), 0, n);
-    }
-
-    Ok(buf)
-}
-#[cfg(feature = "tokios")]
-pub async fn read_all_async<T: tokio::io::AsyncReadExt + Unpin>(
-    ctx: &Context,
-    stream: &mut T,
-    ln: usize,
-) -> io::Result<Box<[u8]>> {
-    if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
-    }
-    let mut rn = 0usize;
-    let mut data = vec![0u8; ln];
-    while rn < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.read(&mut data[rn..]).await {
-            Ok(n) => {
-                if n > 0 {
-                    rn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        format!("read err len:{}!", n),
-                    ));
-                }
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(data.into_boxed_slice())
-}
-#[cfg(feature = "tokios")]
-pub async fn write_all_async<T: tokio::io::AsyncWriteExt + Unpin>(
-    ctx: &Context,
-    stream: &mut T,
-    bts: &[u8],
-) -> io::Result<usize> {
-    if bts.len() <= 0 {
-        return Ok(0);
-    }
-    let mut wn = 0usize;
-    while wn < bts.len() {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match stream.write(&bts[wn..]).await {
+        match fut_tmout_ctxend0(ctx, stream.write(&bts[wn..])).await {
             Err(e) => return Err(e),
             Ok(n) => {
                 if n > 0 {
