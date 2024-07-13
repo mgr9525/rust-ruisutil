@@ -12,6 +12,12 @@ pub use tokio::time::timeout;
 pub use tokio::io::AsyncReadExt;
 pub use tokio::io::AsyncWriteExt;
 
+pub fn block_on<F: core::future::Future>(future: F) -> std::io::Result<F::Output> {
+    let rtm = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    Ok(rtm.block_on(future))
+}
 pub fn current_block_on<F: core::future::Future>(future: F) -> std::io::Result<F::Output> {
     let rtm = tokio::runtime::Builder::new_current_thread()
         .enable_all()
