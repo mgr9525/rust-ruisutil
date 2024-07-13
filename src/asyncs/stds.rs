@@ -12,6 +12,9 @@ pub use async_std::io::timeout;
 pub use async_std::io::ReadExt as AsyncReadExt;
 pub use async_std::io::WriteExt as AsyncWriteExt;
 
+pub fn is_async_std() -> bool {
+    true
+}
 pub fn block_on<F: core::future::Future>(future: F) -> std::io::Result<F::Output> {
     Ok(task::block_on(future))
 }
