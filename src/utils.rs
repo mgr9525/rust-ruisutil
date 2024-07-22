@@ -229,17 +229,14 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        match fut_tmout_ctxend0(ctx, stream.write(&bts[wn..])).await {
-            Err(e) => return Err(e),
-            Ok(n) => {
-                if n > 0 {
-                    wn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
-                }
-            }
+        let n = fut_tmout_ctxend0(ctx, stream.write(&bts[wn..])).await?;
+        stream.flush().await?;
+        if n > 0 {
+            wn += n;
+        } else {
+            // let bts=&data[..];
+            // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+            return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
         }
     }
     Ok(wn)
@@ -313,17 +310,14 @@ pub fn write_all<T: std::io::Write>(
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        match stream.write(&bts[wn..]) {
-            Err(e) => return Err(e),
-            Ok(n) => {
-                if n > 0 {
-                    wn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
-                }
-            }
+        let n = stream.write(&bts[wn..])?;
+        stream.flush()?;
+        if n > 0 {
+            wn += n;
+        } else {
+            // let bts=&data[..];
+            // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+            return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
         }
     }
     Ok(wn)
