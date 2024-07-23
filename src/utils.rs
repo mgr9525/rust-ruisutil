@@ -115,28 +115,30 @@ pub async fn fut_tmout_ctxend0<F, T>(ctx: &Context, future: F) -> std::io::Resul
 where
     F: core::future::Future<Output = std::io::Result<T>>,
 {
-    fut_tmout_ctxends(ctx, 0, Box::pin(future)).await
+    fut_tmout_ctxends(ctx, Duration::from_secs(3), Box::pin(future)).await
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
-pub async fn fut_tmout_ctxend<F, T>(ctx: &Context, secs: u64, future: F) -> std::io::Result<T>
-where
-    F: core::future::Future<Output = std::io::Result<T>>,
-{
-    fut_tmout_ctxends(ctx, secs, Box::pin(future)).await
-}
-#[cfg(any(feature = "asyncs", feature = "tokios"))]
-pub async fn fut_tmout_ctxends<F, T>(
-    ctx: &Context,
-    mut secs: u64,
-    mut future: std::pin::Pin<Box<F>>,
-) -> std::io::Result<T>
+pub async fn fut_tmout_ctxend<F, T>(ctx: &Context, mut secs: u64, future: F) -> std::io::Result<T>
 where
     F: core::future::Future<Output = std::io::Result<T>>,
 {
     if secs < 3 {
         secs = 3;
     }
-    let drt = Duration::from_secs(secs);
+    fut_tmout_ctxends(ctx, Duration::from_secs(secs), Box::pin(future)).await
+}
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn fut_tmout_ctxends<F, T>(
+    ctx: &Context,
+    mut drt: Duration,
+    mut future: std::pin::Pin<Box<F>>,
+) -> std::io::Result<T>
+where
+    F: core::future::Future<Output = std::io::Result<T>>,
+{
+    if drt < Duration::from_millis(10) {
+        drt = Duration::from_millis(10);
+    }
     while !ctx.done() {
         match crate::asyncs::timeouts(drt, &mut future).await {
             Ok(v) => return Ok(v),
