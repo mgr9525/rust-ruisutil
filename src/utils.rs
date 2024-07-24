@@ -6,6 +6,7 @@ use std::{
     error,
     io::{self, Read, Write},
     net,
+    str::FromStr,
     time::{Duration, SystemTime},
 };
 
@@ -66,6 +67,21 @@ pub fn byte2struct<T: Sized>(p: &mut T, bts: &[u8]) -> io::Result<usize> {
     Ok(ln)
 }
 
+pub fn parse_noip_addr<T: AsRef<str>>(s: T) -> std::io::Result<net::SocketAddr> {
+    let idx = s.as_ref().rfind(':');
+    let hs = match idx {
+        Some(i) => {
+            if i == 0 {
+                format!("0.0.0.0{}", &s.as_ref()[i..])
+            // }else if s.as_ref().contains("[")||s.as_ref().contains("::")||s.as_ref().contains("]"){
+            } else {
+                s.as_ref().to_string()
+            }
+        }
+        None => format!("{}:0", s.as_ref()),
+    };
+    net::SocketAddr::from_str(&hs).map_err(|e| ioerr(format!("parse addr err:{}", e), None))
+}
 pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Box<[u8]>> {
     if ln <= 0 {
         return Ok(Box::new([0u8; 0]));
