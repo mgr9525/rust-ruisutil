@@ -91,19 +91,17 @@ impl Context {
     }
 }
 
-pub struct OutDefer<F: FnMut()> {
-    f: F,
-}
+pub struct OutDefer<F: FnMut()>(F);
 
 pub fn defers<F: FnMut()>(f: F) -> OutDefer<F> {
-    OutDefer { f: f }
+    OutDefer(f)
 }
 impl<F> Drop for OutDefer<F>
 where
     F: FnMut(),
 {
     fn drop(&mut self) {
-        (self.f)(); // 调用存储的函数
+        (self.0)(); // 调用存储的函数
     }
 }
 
