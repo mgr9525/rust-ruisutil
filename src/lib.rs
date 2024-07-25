@@ -91,6 +91,22 @@ impl Context {
     }
 }
 
+pub struct OutDefer<F: FnMut()> {
+    f: F,
+}
+
+pub fn defers<F: FnMut()>(f: F) -> OutDefer<F> {
+    OutDefer { f: f }
+}
+impl<F> Drop for OutDefer<F>
+where
+    F: FnMut(),
+{
+    fn drop(&mut self) {
+        (self.f)(); // 调用存储的函数
+    }
+}
+
 pub struct WaitGroup {
     inner: Arc<WgInner>,
 }
@@ -284,6 +300,23 @@ mod tests {
     }
 
     #[test]
+    fn defs() {
+        println!("start");
+        let mut a = "abcd".to_string();
+        let outs = crate::defers(|| {
+            a = "haohaohao".to_string();
+            println!("defer call:{}!!!!", a);
+        });
+
+        std::thread::sleep(Duration::from_secs(1));
+        println!("ing 1111");
+        std::mem::drop(outs);
+        println!("ing 2222:{}", a);
+
+        std::thread::sleep(Duration::from_secs(5));
+    }
+
+    #[test]
     fn tms() {
         let now = std::time::SystemTime::now();
         println!("{}", crate::strftime(now.clone(), "%+"));
@@ -460,7 +493,10 @@ mod tests {
         println!("------00000000:pth={}", &cfg.flpath);
         let ctx = Context::background(None);
         let mut lg = crate::log::Logger::new(&ctx, cfg);
-        lg.level(log::Level::Debug).timezone(10).show_file_info().show_module();
+        lg.level(log::Level::Debug)
+            .timezone(10)
+            .show_file_info()
+            .show_module();
         if let Err(e) = lg.start() {
             println!("log start err:{}", e);
             return;
