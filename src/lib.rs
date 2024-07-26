@@ -164,7 +164,7 @@ impl WaitGroup {
 }
 impl Drop for WaitGroup {
     fn drop(&mut self) {
-        self.inner.count.fetch_add(-1, Ordering::SeqCst);
+        self.inner.count.fetch_sub(1, Ordering::SeqCst);
         self.inner.wkr1.notify_all();
         self.inner.wkr2.notify_all();
     }
