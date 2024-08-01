@@ -183,7 +183,7 @@ impl Clone for WaitGroup {
 mod tests {
     use std::time::{Duration, SystemTime};
 
-    use crate::{bytes::CircleBuf, conf::KVConfig, ArcMut, Context};
+    use crate::{asyncs, bytes::CircleBuf, conf::KVConfig, ArcMut, Context};
 
     #[test]
     fn it_works() {
@@ -510,5 +510,35 @@ mod tests {
             log::warn!("3333");
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    #[test]
+    fn catchs() {
+        println!("main start");
+        asyncs::block_on(async move {
+            asyncs::task::spawn(async move {
+                println!("panic1 start");
+                let dfs=crate::defers(|| println!("panic1 defer"));
+                asyncs::sleep(Duration::from_secs(1)).await;
+                // panic!("test panic!!!!");
+                let bts = [0i32; 2];
+                println!("test:{}", bts[3]);
+                println!("panic2 end");
+            });
+            println!("task start");
+            for i in 0..10 {
+                println!("main[{}] ing", i);
+                asyncs::sleep(Duration::from_secs(1)).await;
+            }
+            asyncs::task::spawn(async move {
+                println!("panic1 start");
+                let dfs=crate::defers(|| println!("panic2 defer"));
+                asyncs::sleep(Duration::from_secs(1)).await;
+                println!("panic2 end");
+            });
+            asyncs::sleep(Duration::from_secs(3)).await;
+            println!("task end");
+        });
+        println!("main end");
     }
 }

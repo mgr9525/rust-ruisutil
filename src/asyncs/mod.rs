@@ -20,3 +20,7 @@ pub trait FutureExt: Future {
     }
 }
 impl<F: Future> FutureExt for F {}
+
+pub trait IO: AsyncRead + AsyncWrite + Unpin {}
+impl IO for net::TcpStream {}
+impl IO for fs::File {}

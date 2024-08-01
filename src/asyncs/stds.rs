@@ -1,6 +1,7 @@
 #[cfg(feature = "asyncs")]
 pub use async_std;
 
+pub use async_std::io;
 pub use async_std::fs;
 pub use async_std::net;
 pub use async_std::sync;
@@ -9,6 +10,8 @@ pub use async_std::task;
 pub use async_std::channel::{Receiver, Sender};
 pub use async_std::io::timeout;
 
+pub use async_std::io::Read as AsyncRead;
+pub use async_std::io::Write as AsyncWrite;
 pub use async_std::io::ReadExt as AsyncReadExt;
 pub use async_std::io::WriteExt as AsyncWriteExt;
 

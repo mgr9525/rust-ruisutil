@@ -1,6 +1,7 @@
 #[cfg(feature = "tokios")]
 pub use tokio;
 
+pub use tokio::io;
 pub use tokio::fs;
 pub use tokio::net;
 pub use tokio::sync;
@@ -9,6 +10,8 @@ pub use tokio::task;
 pub use tokio::sync::mpsc::{Receiver, Sender};
 pub use tokio::time::timeout;
 
+pub use tokio::io::AsyncRead;
+pub use tokio::io::AsyncWrite;
 pub use tokio::io::AsyncReadExt;
 pub use tokio::io::AsyncWriteExt;
 
