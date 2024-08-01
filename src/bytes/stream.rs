@@ -1,4 +1,5 @@
 use std::{
+    future::Future,
     io,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
@@ -166,5 +167,121 @@ impl ByteSteamBuf {
         if sz > maxs {
             self.set_max(sz);
         }
+    }
+
+    async fn readbts(&self, ln: usize) -> std::io::Result<ByteBox> {
+        match self.pull().await {
+            None => Err(crate::ioerr(
+                "buff is closed?",
+                Some(std::io::ErrorKind::BrokenPipe),
+            )),
+            Some(mut it) => {
+                if ln < it.len() {
+                    let mut lkv = self.buf.write().await;
+                    if let Ok(rgt) = it.cut(ln) {
+                        lkv.push_front(rgt);
+                    }
+                }
+                Ok(it)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "asyncs")]
+impl crate::asyncs::AsyncRead for ByteSteamBuf {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> std::task::Poll<io::Result<usize>> {
+        let rst = match std::pin::pin!(self.readbts(buf.len())).poll(cx) {
+            std::task::Poll::Pending => return std::task::Poll::Pending,
+            std::task::Poll::Ready(Err(e)) => Err(e),
+            std::task::Poll::Ready(Ok(it)) => {
+                buf.copy_from_slice(&it[..]);
+                Ok(it.len())
+            }
+        };
+        std::task::Poll::Ready(rst)
+    }
+}
+#[cfg(feature = "asyncs")]
+impl crate::asyncs::AsyncWrite for ByteSteamBuf {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<io::Result<usize>> {
+        let rst = match std::pin::pin!(self.push(buf)).poll(cx) {
+            std::task::Poll::Pending => return std::task::Poll::Pending,
+            std::task::Poll::Ready(Err(e)) => Err(e),
+            std::task::Poll::Ready(Ok(_)) => Ok(buf.len()),
+        };
+        std::task::Poll::Ready(rst)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        self.close();
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+#[cfg(feature = "tokios")]
+impl crate::asyncs::AsyncRead for ByteSteamBuf {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        let rst = match std::pin::pin!(self.readbts(buf.remaining())).poll(cx) {
+            std::task::Poll::Pending => return std::task::Poll::Pending,
+            std::task::Poll::Ready(Err(e)) => Err(e),
+            std::task::Poll::Ready(Ok(it)) => {
+                buf.put_slice(&it[..]);
+                Ok(())
+            }
+        };
+        std::task::Poll::Ready(rst)
+    }
+}
+
+#[cfg(feature = "tokios")]
+impl crate::asyncs::AsyncWrite for ByteSteamBuf {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, io::Error>> {
+        let rst = match std::pin::pin!(self.push(buf)).poll(cx) {
+            std::task::Poll::Pending => return std::task::Poll::Pending,
+            std::task::Poll::Ready(Err(e)) => Err(e),
+            std::task::Poll::Ready(Ok(_)) => Ok(buf.len()),
+        };
+        std::task::Poll::Ready(rst)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), io::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), io::Error>> {
+        self.close();
+        std::task::Poll::Ready(Ok(()))
     }
 }
