@@ -199,7 +199,8 @@ impl crate::asyncs::AsyncRead for ByteSteamBuf {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
             std::task::Poll::Ready(Ok(it)) => {
-                buf.copy_from_slice(&it[..]);
+                let bufs = &mut buf[..it.len()];
+                bufs.copy_from_slice(&it[..]);
                 Ok(it.len())
             }
         };
