@@ -155,7 +155,7 @@ where
         drt = Duration::from_millis(10);
     }
     while !ctx.done() {
-        match crate::asyncs::timeouts(drt, &mut future).await {
+        match timeoutios(drt, &mut future).await {
             Ok(v) => return Ok(v),
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::TimedOut {
@@ -168,6 +168,14 @@ where
         "ctx end",
         Some(std::io::ErrorKind::Interrupted),
     ))
+}
+
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn timeoutios<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
+where
+    F: core::future::Future<Output = std::io::Result<T>>,
+{
+    crate::asyncs::timeouts(duration, future).await
 }
 
 use crate::bytes;

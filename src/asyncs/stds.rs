@@ -1,8 +1,9 @@
+
 #[cfg(feature = "asyncs")]
 pub use async_std;
 
-pub use async_std::io;
 pub use async_std::fs;
+pub use async_std::io;
 pub use async_std::net;
 pub use async_std::sync;
 pub use async_std::task;
@@ -11,8 +12,8 @@ pub use async_std::channel::{Receiver, Sender};
 pub use async_std::io::timeout;
 
 pub use async_std::io::Read as AsyncRead;
-pub use async_std::io::Write as AsyncWrite;
 pub use async_std::io::ReadExt as AsyncReadExt;
+pub use async_std::io::Write as AsyncWrite;
 pub use async_std::io::WriteExt as AsyncWriteExt;
 
 pub fn is_async_std() -> bool {
@@ -36,12 +37,8 @@ pub async fn sleep(dur: std::time::Duration) {
 }
 pub async fn timeouts<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = std::io::Result<T>>,
+    F: core::future::Future<Output = Result<T, std::io::Error>>,
 {
-    /* match timeout(duration, future).await {
-        Ok(v) => v,
-        Err(e) => Err(crate::ioerr("timeout", Some(std::io::ErrorKind::TimedOut))),
-    } */
     timeout(duration, future).await
 }
 

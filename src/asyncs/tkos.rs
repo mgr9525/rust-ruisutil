@@ -1,8 +1,8 @@
 #[cfg(feature = "tokios")]
 pub use tokio;
 
-pub use tokio::io;
 pub use tokio::fs;
+pub use tokio::io;
 pub use tokio::net;
 pub use tokio::sync;
 pub use tokio::task;
@@ -11,8 +11,8 @@ pub use tokio::sync::mpsc::{Receiver, Sender};
 pub use tokio::time::timeout;
 
 pub use tokio::io::AsyncRead;
-pub use tokio::io::AsyncWrite;
 pub use tokio::io::AsyncReadExt;
+pub use tokio::io::AsyncWrite;
 pub use tokio::io::AsyncWriteExt;
 
 pub fn is_async_std() -> bool {
@@ -43,12 +43,29 @@ where
 pub async fn sleep(dur: std::time::Duration) {
     tokio::time::sleep(dur).await
 }
-pub async fn timeouts<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
+pub async fn timeouts<F, T, E>(duration: std::time::Duration, future: F) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = std::io::Result<T>>,
+    F: core::future::Future<Output = Result<T, E>>,
+    E: std::error::Error,
 {
     match timeout(duration, future).await {
-        Ok(v) => v,
+        Ok(v) => match v {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                match e.source() {
+                    Some(v) => match v.downcast_ref::<std::io::Error>() {
+                        Some(ioe) => Err(crate::ioerr(format!("{}", ioe), Some(ioe.kind()))),
+                        None => Err(crate::ioerr(format!("other err found:{}", e), None)),
+                    },
+                    None => Err(crate::ioerr("not err found", None)),
+                }
+                /* if let Some(ioe) = e.source().and_then(|v| v.downcast_ref::<std::io::Error>()) {
+                    Err(std::io::Error::new(ioe.kind(), ioe))
+                } else {
+                    Err(crate::ioerr("not err found", None))
+                } */
+            }
+        },
         Err(e) => Err(crate::ioerr(
             "future timed out",
             Some(std::io::ErrorKind::TimedOut),
