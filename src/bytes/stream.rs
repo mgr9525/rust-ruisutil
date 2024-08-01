@@ -226,7 +226,16 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<io::Result<()>> {
-        std::task::Poll::Ready(Ok(()))
+        match std::pin::pin!(self.len()).poll(cx) {
+            std::task::Poll::Pending => std::task::Poll::Pending,
+            std::task::Poll::Ready(sz) => {
+                if sz > 0 {
+                    std::task::Poll::Pending
+                } else {
+                    std::task::Poll::Ready(Ok(()))
+                }
+            }
+        }
     }
 
     fn poll_close(
