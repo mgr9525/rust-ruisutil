@@ -42,8 +42,15 @@ pub trait IO: AsyncRead + AsyncWrite + Unpin {
 impl IO for net::TcpStream {
     fn shutdownw<'a>(&'a mut self) -> BoxFuture<'a, std::io::Result<()>> {
         async move {
-            self.shutdown(std::net::Shutdown::Write);
-            Ok(())
+            #[cfg(feature = "asyncs")]
+            {
+                self.shutdown(std::net::Shutdown::Write);
+                Ok(())
+            }
+            #[cfg(feature = "tokios")]
+            {
+                self.shutdown().await
+            }
         }
         .boxed()
     }
