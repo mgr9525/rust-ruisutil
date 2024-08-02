@@ -1,4 +1,3 @@
-
 #[cfg(feature = "asyncs")]
 pub use async_std;
 
@@ -19,8 +18,11 @@ pub use async_std::io::WriteExt as AsyncWriteExt;
 pub fn is_async_std() -> bool {
     true
 }
-pub fn block_on<F: core::future::Future>(future: F) -> std::io::Result<F::Output> {
-    Ok(task::block_on(future))
+pub fn block_on<F>(future: F) -> std::io::Result<()>
+where
+    F: core::future::Future<Output = std::io::Result<()>>,
+{
+    task::block_on(future)
 }
 pub fn current_block_on<F: core::future::Future>(future: F) -> std::io::Result<F::Output> {
     Ok(task::block_on(future))
