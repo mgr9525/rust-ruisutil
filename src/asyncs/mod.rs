@@ -9,6 +9,7 @@ pub use stds::*;
 pub use tkos::*;
 
 pub use core::future::Future;
+use std::task::Context;
 pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
 
 pub trait FutureExt: Future {
@@ -21,6 +22,34 @@ pub trait FutureExt: Future {
 }
 impl<F: Future> FutureExt for F {}
 
-pub trait IO: AsyncRead + AsyncWrite + Unpin {}
-impl IO for net::TcpStream {}
-impl IO for fs::File {}
+/* pub struct ShutdownwFuture<'a, T: Unpin + ?Sized> {
+    pub(crate) writer: &'a mut T,
+}
+
+impl<T: AsyncWrite + Unpin + ?Sized> Future for ShutdownwFuture<'_, T> {
+    type Output = std::io::Result<()>;
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        std::pin::pin!(&mut *self.writer).poll_close(cx)
+    }
+} */
+pub trait IO: AsyncRead + AsyncWrite + Unpin {
+    fn shutdownw<'a>(&'a mut self) -> BoxFuture<'a, std::io::Result<()>>;
+}
+impl IO for net::TcpStream {
+    fn shutdownw<'a>(&'a mut self) -> BoxFuture<'a, std::io::Result<()>> {
+        async move {
+            self.shutdown(std::net::Shutdown::Write);
+            Ok(())
+        }
+        .boxed()
+    }
+}
+impl IO for fs::File {
+    fn shutdownw<'a>(&'a mut self) -> BoxFuture<'a, std::io::Result<()>> {
+        async move { self.flush().await }.boxed()
+    }
+}
