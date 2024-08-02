@@ -16,8 +16,11 @@ pub struct ByteSteamBuf {
     buf: RwLock<ByteBoxBuf>,
     max: AtomicUsize,
     tmout: Duration,
-    wkr1: WakerFut,
-    wkr2: WakerFut,
+    wkr_can_read: WakerFut,
+    wkr_can_write: WakerFut,
+
+    wk_can_read: Option<std::task::Waker>,
+    wk_can_write: Option<std::task::Waker>,
 }
 
 impl ByteSteamBuf {
@@ -28,14 +31,17 @@ impl ByteSteamBuf {
             buf: RwLock::new(ByteBoxBuf::new()),
             max: AtomicUsize::new(max),
             tmout: tmout,
-            wkr1: WakerFut::new(&ctx),
-            wkr2: WakerFut::new(&ctx),
+            wkr_can_read: WakerFut::new(&ctx),
+            wkr_can_write: WakerFut::new(&ctx),
+
+            wk_can_read: None,
+            wk_can_write: None,
         }
     }
     pub fn close(&self) {
         self.ctx.stop();
-        self.wkr1.close();
-        self.wkr2.close();
+        self.wkr_can_read.close();
+        self.wkr_can_write.close();
     }
     pub async fn waits(&self, tmout: Option<Duration>) {
         let ctxs = match tmout {
@@ -48,14 +54,13 @@ impl ByteSteamBuf {
                 break;
             }
             std::mem::drop(lkv);
-            asyncs::timeout(Duration::from_millis(200), self.wkr1.clone()).await;
+            asyncs::timeout(Duration::from_millis(200), self.wkr_can_write.clone()).await;
         }
     }
     pub async fn clear(&self) {
         let mut lkv = self.buf.write().await;
         lkv.clear();
-        self.wkr1.notify_all();
-        self.wkr2.notify_all();
+        self.notify_all();
     }
     pub async fn push_all(&self, data: &ByteBoxBuf) -> io::Result<()> {
         for v in data.iter() {
@@ -78,13 +83,13 @@ impl ByteSteamBuf {
                 }
                 std::mem::drop(lkv);
                 // self.wkr1.wait_timeout(self.tmout.clone());
-                asyncs::timeout(self.tmout.clone(), self.wkr1.clone()).await;
+                asyncs::timeout(self.tmout.clone(), self.wkr_can_write.clone()).await;
                 // self.wkr1.notify_all();
             }
         }
         let mut lkv = self.buf.write().await;
         lkv.push(data);
-        self.wkr2.notify_all();
+        self.notify_all_can_read();
         Ok(())
     }
     pub async fn pull(&self) -> Option<ByteBox> {
@@ -95,12 +100,12 @@ impl ByteSteamBuf {
             }
             std::mem::drop(lkv);
             // self.wkr2.wait_timeout(self.tmout.clone());
-            asyncs::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+            asyncs::timeout(self.tmout.clone(), self.wkr_can_read.clone()).await;
             // self.wkr2.notify_all();
         }
         let mut lkv = self.buf.write().await;
         let rts = lkv.pull();
-        self.wkr1.notify_all();
+        self.notify_all_can_write();
         rts
     }
     pub async fn pull_size(
@@ -127,18 +132,32 @@ impl ByteSteamBuf {
             }
             std::mem::drop(lkv);
             // self.wkr2.wait_timeout(self.tmout.clone());
-            asyncs::timeout(self.tmout.clone(), self.wkr2.clone()).await;
+            asyncs::timeout(self.tmout.clone(), self.wkr_can_read.clone()).await;
         }
         let mut lkv = self.buf.write().await;
-        lkv.cut_front(sz)
+        let rts = lkv.cut_front(sz);
+        self.notify_all_can_write();
+        rts
         /* match lkv.cut_front(sz) {
             Err(e) => Err(e),
             Ok(v) => Ok(v.to_bytes()),
         } */
     }
+    fn notify_all_can_read(&self) {
+        self.wkr_can_read.notify_all();
+        if let Some(v) = &self.wk_can_read {
+            v.wake_by_ref();
+        }
+    }
+    fn notify_all_can_write(&self) {
+        self.wkr_can_write.notify_all();
+        if let Some(v) = &self.wk_can_write {
+            v.wake_by_ref();
+        }
+    }
     pub fn notify_all(&self) {
-        self.wkr1.notify_all();
-        self.wkr2.notify_all();
+        self.notify_all_can_read();
+        self.notify_all_can_write();
     }
     /* pub async fn clear(&self) {
         let mut lkv = self.buf.write().await;
@@ -191,10 +210,11 @@ impl ByteSteamBuf {
 #[cfg(feature = "asyncs")]
 impl crate::asyncs::AsyncRead for ByteSteamBuf {
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> std::task::Poll<io::Result<usize>> {
+        self.wk_can_read = Some(cx.waker().clone());
         let rst = match std::pin::pin!(self.readbts(buf.len())).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
@@ -210,10 +230,11 @@ impl crate::asyncs::AsyncRead for ByteSteamBuf {
 #[cfg(feature = "asyncs")]
 impl crate::asyncs::AsyncWrite for ByteSteamBuf {
     fn poll_write(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<io::Result<usize>> {
+        self.wk_can_write = Some(cx.waker().clone());
         let rst = match std::pin::pin!(self.push(buf)).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
@@ -223,7 +244,7 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
     }
 
     fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<io::Result<()>> {
         if self.ctx.done() {
@@ -232,15 +253,10 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         }
-        match std::pin::pin!(self.len()).poll(cx) {
+        self.wk_can_write = Some(cx.waker().clone());
+        match std::pin::pin!(self.waits(None)).poll(cx) {
             std::task::Poll::Pending => std::task::Poll::Pending,
-            std::task::Poll::Ready(sz) => {
-                if sz > 0 {
-                    std::task::Poll::Pending
-                } else {
-                    std::task::Poll::Ready(Ok(()))
-                }
-            }
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(Ok(())),
         }
     }
 
@@ -255,10 +271,11 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
 #[cfg(feature = "tokios")]
 impl crate::asyncs::AsyncRead for ByteSteamBuf {
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<io::Result<()>> {
+        self.wk_can_read = Some(cx.waker().clone());
         let rst = match std::pin::pin!(self.readbts(buf.remaining())).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
@@ -274,10 +291,11 @@ impl crate::asyncs::AsyncRead for ByteSteamBuf {
 #[cfg(feature = "tokios")]
 impl crate::asyncs::AsyncWrite for ByteSteamBuf {
     fn poll_write(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, io::Error>> {
+        self.wk_can_write = Some(cx.waker().clone());
         let rst = match std::pin::pin!(self.push(buf)).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
@@ -287,10 +305,20 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
     }
 
     fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), io::Error>> {
-        std::task::Poll::Ready(Ok(()))
+        if self.ctx.done() {
+            return std::task::Poll::Ready(Err(crate::ioerr(
+                "buff is closed?",
+                Some(std::io::ErrorKind::BrokenPipe),
+            )));
+        }
+        self.wk_can_write = Some(cx.waker().clone());
+        match std::pin::pin!(self.waits(None)).poll(cx) {
+            std::task::Poll::Pending => std::task::Poll::Pending,
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(Ok(())),
+        }
     }
 
     fn poll_shutdown(

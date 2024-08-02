@@ -77,6 +77,7 @@ impl WakerFut {
             return true;
         }
         if it.ticked.load(Ordering::SeqCst) {
+            it.ticked.store(false, Ordering::SeqCst);
             return true;
         }
         false
@@ -93,26 +94,23 @@ impl Future for WakerFut {
         if this.done() {
             return std::task::Poll::Ready(Ok(()));
         }
-        let mut lkv = match this.inner.ticks.lock() {
+        let mut lkv = match this.inner.ticks.try_lock() {
             Ok(v) => v,
             Err(_) => return std::task::Poll::Pending,
         };
-        match &this.wk {
-            None => this.wk = Some(cx.waker().clone()),
-            Some(vs) => {
-                if !vs.will_wake(cx.waker()) {
-                    let mut i = 0;
-                    for v in &*lkv {
-                        if v.wk.will_wake(vs) {
-                            lkv.remove(i);
-                            break;
-                        }
-                        i += 1;
+        if let Some(vs) = &this.wk {
+            if !vs.will_wake(cx.waker()) {
+                let mut i = 0;
+                for v in &*lkv {
+                    if v.wk.will_wake(vs) {
+                        lkv.remove(i);
+                        break;
                     }
-                    this.wk = Some(cx.waker().clone());
+                    i += 1;
                 }
             }
         }
+        this.wk = Some(cx.waker().clone());
 
         let mut i = 0;
         for v in &*lkv {
