@@ -11,6 +11,7 @@ pub use list::ListDequeMax;
 pub use timer::Timer;
 pub use utils::*;
 
+#[cfg(any(feature = "asyncs",feature="tokios"))]
 pub mod asyncs;
 pub mod bytes;
 pub mod conf;
