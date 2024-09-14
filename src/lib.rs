@@ -139,6 +139,7 @@ impl WaitGroup {
             }
         }
     }
+    #[cfg(any(feature = "asyncs",feature="tokios"))]
     pub async fn waits(&self, ctxs: Option<&Context>) {
         loop {
             if let Some(v) = ctxs {
