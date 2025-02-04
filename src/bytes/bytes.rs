@@ -239,8 +239,8 @@ impl ByteBoxBuf {
     }
     pub fn lens(&self) -> usize {
         let mut rts = 0;
-        let mut itr = self.list.iter();
-        while let Some(v) = itr.next() {
+        let itr = self.list.iter();
+        for v in itr {
             rts += v.len();
         }
         rts
@@ -250,8 +250,8 @@ impl ByteBoxBuf {
             return Err(ioerr("idx err:more count", None));
         }
         let mut lns = 0usize;
-        let mut itr = self.list.iter();
-        while let Some(v) = itr.next() {
+        let itr = self.list.iter();
+        for v in itr {
             let idxs = idx - lns;
             if idxs < v.len() {
                 return Ok(v[idxs]);
@@ -270,8 +270,8 @@ impl ByteBoxBuf {
         let mut rtbts: Vec<u8> = Vec::new();
         let mut start_real = start;
         let mut len_real = len;
-        let mut itr = self.list.iter();
-        'ends: while let Some(v) = itr.next() {
+        let itr = self.list.iter();
+        'ends: for v in itr {
             let ln = v.len();
             if start_real < ln {
                 for b in &v[start_real..] {
@@ -343,8 +343,9 @@ impl ByteBoxBuf {
     pub fn to_bytes(&self) -> Box<[u8]> {
         let mut pos = 0usize;
         let mut rtbts = vec![0u8; self.count].into_boxed_slice();
-        let mut itr = self.list.iter();
-        while let Some(v) = itr.next() {
+        let itr = self.list.iter();
+        // while let Some(v) = itr.next() {
+        for v in itr {
             let end = pos + v.len();
             (&mut rtbts[pos..end]).copy_from_slice(&v[..]);
             pos = end;

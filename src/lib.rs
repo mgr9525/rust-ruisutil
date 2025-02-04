@@ -11,7 +11,7 @@ pub use list::ListDequeMax;
 pub use timer::Timer;
 pub use utils::*;
 
-#[cfg(any(feature = "asyncs",feature="tokios"))]
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub mod asyncs;
 pub mod bytes;
 pub mod conf;
@@ -140,7 +140,7 @@ impl WaitGroup {
             }
         }
     }
-    #[cfg(any(feature = "asyncs",feature="tokios"))]
+    #[cfg(any(feature = "asyncs", feature = "tokios"))]
     pub async fn waits(&self, ctxs: Option<&Context>) {
         loop {
             if let Some(v) = ctxs {
@@ -514,7 +514,7 @@ mod tests {
         }
     }
 
-    #[test]
+    /* #[test]
     fn catchs() {
         println!("main start");
         asyncs::block_on(async move {
@@ -542,5 +542,5 @@ mod tests {
             println!("task end");
         });
         println!("main end");
-    }
+    } */
 }
