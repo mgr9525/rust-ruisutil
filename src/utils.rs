@@ -253,11 +253,12 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
     stream: &mut T,
     bts: &[u8],
 ) -> io::Result<usize> {
-    if bts.len() <= 0 {
+    let sz = bts.len();
+    if sz <= 0 {
         return Ok(0);
     }
     let mut wn = 0usize;
-    while wn < bts.len() {
+    while wn < sz {
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
@@ -269,6 +270,28 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
             // let bts=&data[..];
             // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
             return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+        }
+    }
+    Ok(wn)
+}
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn write_allbuf_async<T: asyncs::AsyncWriteExt + Unpin>(
+    ctx: &Context,
+    stream: &mut T,
+    bts: &mut bytes::ByteBoxBuf,
+) -> io::Result<usize> {
+    let sz = bts.len();
+    if sz <= 0 {
+        return Ok(0);
+    }
+    let mut wn = 0usize;
+    while wn < sz {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match bts.pull() {
+            None => break,
+            Some(v) => wn += write_all_async(ctx, stream, &v[..]).await?,
         }
     }
     Ok(wn)
@@ -334,11 +357,12 @@ pub fn write_all<T: std::io::Write>(
     stream: &mut T,
     bts: &[u8],
 ) -> io::Result<usize> {
-    if bts.len() <= 0 {
+    let sz = bts.len();
+    if sz <= 0 {
         return Ok(0);
     }
     let mut wn = 0usize;
-    while wn < bts.len() {
+    while wn < sz {
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
@@ -350,6 +374,27 @@ pub fn write_all<T: std::io::Write>(
             // let bts=&data[..];
             // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
             return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+        }
+    }
+    Ok(wn)
+}
+pub fn write_allbuf<T: std::io::Write>(
+    ctx: &Context,
+    stream: &mut T,
+    bts: &mut bytes::ByteBoxBuf,
+) -> io::Result<usize> {
+    let sz = bts.len();
+    if sz <= 0 {
+        return Ok(0);
+    }
+    let mut wn = 0usize;
+    while wn < sz {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        match bts.pull() {
+            None => break,
+            Some(v) => wn += write_all(ctx, stream, &v[..])?,
         }
     }
     Ok(wn)
