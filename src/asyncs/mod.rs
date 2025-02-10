@@ -60,3 +60,13 @@ impl IO for fs::File {
         async move { self.flush().await }.boxed()
     }
 }
+
+pub async fn waitctx(ctx: &crate::Context) {
+    while !ctx.done() {
+        sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+pub async fn waitctxs(ctx: &crate::Context, tms: std::time::Duration) {
+    let cx = crate::Context::with_timeout(Some(ctx.clone()), tms);
+    waitctx(&cx).await
+}
