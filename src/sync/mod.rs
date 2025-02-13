@@ -16,7 +16,7 @@ mod tests {
     fn waker() {
         let wkr = crate::sync::Waker::new(&crate::Context::background(None));
         let wkrc = wkr.clone();
-        std::thread::spawn(move ||{
+        std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(3));
             wkrc.notify_all();
             std::thread::sleep(Duration::from_secs(5));
@@ -26,22 +26,14 @@ mod tests {
         let now = SystemTime::now();
         println!("start wait");
         wkr.wait_timeout(Duration::from_millis(100));
-        if let Ok(v) = SystemTime::now().duration_since(now) {
-            println!("end wait:{}ms", v.as_millis());
-        } else {
-            println!("end wait");
-        }
+        println!("end wait:{}ms", crate::tms_now_since(now).as_millis());
 
         let now = SystemTime::now();
         println!("start wait2");
         wkr.wait_timeout(Duration::from_millis(100));
-        if let Ok(v) = SystemTime::now().duration_since(now) {
-            println!("end wait2:{}ms", v.as_millis());
-        } else {
-            println!("end wait2");
-        }
+        println!("end wait:{}ms", crate::tms_now_since(now).as_millis());
     }
-    
+
     #[cfg(feature = "asyncs")]
     #[test]
     fn waker_fut() {
@@ -62,38 +54,22 @@ mod tests {
             async_std::task::spawn(async move {
                 println!("start wait1");
                 async_std::io::timeout(Duration::from_secs(2), wkrc).await;
-                if let Ok(v) = SystemTime::now().duration_since(now) {
-                    println!("end wait1:{}ms", v.as_millis());
-                } else {
-                    println!("end wait1");
-                }
+                println!("end wait1:{}ms", crate::tms_now_since(now).as_millis());
             });
 
             println!("start wait");
             wkr.clone().await;
-            if let Ok(v) = SystemTime::now().duration_since(now) {
-                println!("end wait:{}ms", v.as_millis());
-            } else {
-                println!("end wait");
-            }
+            println!("end wait:{}ms", crate::tms_now_since(now).as_millis());
 
             let now = SystemTime::now();
             println!("start wait2");
             wkr.clone().await;
-            if let Ok(v) = SystemTime::now().duration_since(now) {
-                println!("end wait2:{}ms", v.as_millis());
-            } else {
-                println!("end wait2");
-            }
+            println!("end wait2:{}ms", crate::tms_now_since(now).as_millis());
 
             let now = SystemTime::now();
             println!("start wait3");
             wkr.await;
-            if let Ok(v) = SystemTime::now().duration_since(now) {
-                println!("end wait3:{}ms", v.as_millis());
-            } else {
-                println!("end wait3");
-            }
+            println!("end wait3:{}ms", crate::tms_now_since(now).as_millis());
         });
     }
 }
