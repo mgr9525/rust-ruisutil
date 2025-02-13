@@ -263,7 +263,6 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
         let n = fut_tmout_ctxend0(ctx, stream.write(&bts[wn..])).await?;
-        stream.flush().await?;
         if n > 0 {
             wn += n;
         } else {
@@ -272,6 +271,7 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
             return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
         }
     }
+    stream.flush().await?;
     Ok(wn)
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
@@ -365,7 +365,6 @@ pub fn write_all<T: std::io::Write>(
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
         let n = stream.write(&bts[wn..])?;
-        stream.flush()?;
         if n > 0 {
             wn += n;
         } else {
@@ -374,6 +373,7 @@ pub fn write_all<T: std::io::Write>(
             return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
         }
     }
+    stream.flush()?;
     Ok(wn)
 }
 pub fn write_allbuf<T: std::io::Write>(
