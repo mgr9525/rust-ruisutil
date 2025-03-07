@@ -68,6 +68,32 @@ impl ByteSteamBuf {
         }
         Ok(())
     }
+
+    pub async fn push_front<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
+        let lkv = self.buf.write().await;
+        if self.get_max() > 0 {
+            loop {
+                if self.ctx.done() {
+                    return Err(crate::ioerr(
+                        "close chan!!!",
+                        Some(io::ErrorKind::BrokenPipe),
+                    ));
+                }
+                let lkv = self.buf.read().await;
+                if lkv.len() <= self.get_max() {
+                    break;
+                }
+                std::mem::drop(lkv);
+                // self.wkr1.wait_timeout(self.tmout.clone());
+                asyncs::timeout(self.tmout.clone(), self.wkr_can_write.clone()).await;
+                // self.wkr1.notify_all();
+            }
+        }
+        let mut lkv = self.buf.write().await;
+        lkv.push_front(data);
+        self.notify_all_can_read();
+        Ok(())
+    }
     pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
         if self.get_max() > 0 {
             loop {
@@ -186,6 +212,11 @@ impl ByteSteamBuf {
         if sz > maxs {
             self.set_max(sz);
         }
+    }
+
+    pub async fn get_byte(&self, idx: usize) -> io::Result<u8> {
+        let lkv = self.buf.read().await;
+        lkv.get_byte(idx)
     }
 
     async fn readbts(&self, ln: usize) -> std::io::Result<ByteBox> {
