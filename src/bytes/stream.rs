@@ -38,6 +38,9 @@ impl ByteSteamBuf {
             wk_can_write: None,
         }
     }
+    pub fn doned(&self) -> bool {
+        self.ctx.done()
+    }
     pub fn close(&self) {
         self.ctx.stop();
         self.wkr_can_read.close();
@@ -70,10 +73,9 @@ impl ByteSteamBuf {
     }
 
     pub async fn push_front<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
-        let lkv = self.buf.write().await;
         if self.get_max() > 0 {
             loop {
-                if self.ctx.done() {
+                if self.doned() {
                     return Err(crate::ioerr(
                         "close chan!!!",
                         Some(io::ErrorKind::BrokenPipe),
@@ -97,7 +99,7 @@ impl ByteSteamBuf {
     pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
         if self.get_max() > 0 {
             loop {
-                if self.ctx.done() {
+                if self.doned() {
                     return Err(crate::ioerr(
                         "close chan!!!",
                         Some(io::ErrorKind::BrokenPipe),
@@ -119,7 +121,7 @@ impl ByteSteamBuf {
         Ok(())
     }
     pub async fn pull(&self) -> Option<ByteBox> {
-        while !self.ctx.done() {
+        while !self.doned() {
             let lkv = self.buf.read().await;
             if lkv.len() > 0 {
                 break;
@@ -141,7 +143,7 @@ impl ByteSteamBuf {
     ) -> io::Result<ByteBoxBuf> {
         self.more_max(sz).await;
         loop {
-            if self.ctx.done() {
+            if self.doned() {
                 return Err(crate::ioerr(
                     "close chan!!!",
                     Some(io::ErrorKind::BrokenPipe),

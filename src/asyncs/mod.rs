@@ -9,9 +9,7 @@ pub use stds::*;
 pub use tkos::*;
 
 pub use core::future::Future;
-use std::task::Context;
 pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn core::future::Future<Output = T> + Send + 'a>>;
-
 pub trait FutureExt: Future {
     fn boxed<'a>(self) -> BoxFuture<'a, Self::Output>
     where
@@ -20,7 +18,7 @@ pub trait FutureExt: Future {
         Box::pin(self)
     }
 }
-impl<F: Future> FutureExt for F {}
+impl<T: Future> FutureExt for T {}
 
 /* pub struct ShutdownwFuture<'a, T: Unpin + ?Sized> {
     pub(crate) writer: &'a mut T,
