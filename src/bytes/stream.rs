@@ -38,8 +38,17 @@ impl ByteSteamBuf {
             wk_can_write: None,
         }
     }
-    pub fn doned(&self) -> bool {
+    pub fn done(&self) -> bool {
         self.ctx.done()
+    }
+    pub fn done_err(&self) -> std::io::Result<()> {
+        match self.ctx.done_err() {
+            Ok(_) => Ok(()),
+            Err(e) => Err(crate::ioerr(
+                "close chan!!!",
+                Some(io::ErrorKind::BrokenPipe),
+            )),
+        }
     }
     pub fn close(&self) {
         self.ctx.stop();
@@ -75,12 +84,7 @@ impl ByteSteamBuf {
     pub async fn push_front<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
         if self.get_max() > 0 {
             loop {
-                if self.doned() {
-                    return Err(crate::ioerr(
-                        "close chan!!!",
-                        Some(io::ErrorKind::BrokenPipe),
-                    ));
-                }
+                self.done_err()?;
                 let lkv = self.buf.read().await;
                 if lkv.len() <= self.get_max() {
                     break;
@@ -91,6 +95,7 @@ impl ByteSteamBuf {
                 // self.wkr1.notify_all();
             }
         }
+        self.done_err()?;
         let mut lkv = self.buf.write().await;
         lkv.push_front(data);
         self.notify_all_can_read();
@@ -99,12 +104,7 @@ impl ByteSteamBuf {
     pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
         if self.get_max() > 0 {
             loop {
-                if self.doned() {
-                    return Err(crate::ioerr(
-                        "close chan!!!",
-                        Some(io::ErrorKind::BrokenPipe),
-                    ));
-                }
+                self.done_err()?;
                 let lkv = self.buf.read().await;
                 if lkv.len() <= self.get_max() {
                     break;
@@ -115,13 +115,14 @@ impl ByteSteamBuf {
                 // self.wkr1.notify_all();
             }
         }
+        self.done_err()?;
         let mut lkv = self.buf.write().await;
         lkv.push(data);
         self.notify_all_can_read();
         Ok(())
     }
     pub async fn pull(&self) -> Option<ByteBox> {
-        while !self.doned() {
+        while !self.done() {
             let lkv = self.buf.read().await;
             if lkv.len() > 0 {
                 break;
@@ -142,17 +143,9 @@ impl ByteSteamBuf {
         sz: usize,
     ) -> io::Result<ByteBoxBuf> {
         self.more_max(sz).await;
-        loop {
-            if self.doned() {
-                return Err(crate::ioerr(
-                    "close chan!!!",
-                    Some(io::ErrorKind::BrokenPipe),
-                ));
-            }
+        while !self.done() {
             if let Some(v) = ctx {
-                if v.done() {
-                    return Err(crate::ioerr("ctx end!!!", Some(io::ErrorKind::BrokenPipe)));
-                }
+                v.done_err()?;
             }
             let lkv = self.buf.read().await;
             if lkv.len() >= sz {
