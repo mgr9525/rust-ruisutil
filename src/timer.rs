@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, Instant};
 
 use crate::ArcMut;
 
@@ -12,47 +9,47 @@ pub struct Timer {
 
 struct Inner {
     dur: Duration,
-    tms: SystemTime,
+    tms: Option<Instant>,
 }
 impl Timer {
     pub fn new(dur: Duration) -> Self {
         Self {
             inner: ArcMut::new(Inner {
                 dur: dur,
-                tms: SystemTime::UNIX_EPOCH,
+                tms: None,
             }),
         }
     }
     pub fn reset(&self) {
-        unsafe { self.inner.muts().tms = SystemTime::now() };
+        unsafe { self.inner.muts().tms = Some(Instant::now()) };
     }
     pub fn reinit(&self) {
-        unsafe { self.inner.muts().tms = SystemTime::UNIX_EPOCH };
+        unsafe { self.inner.muts().tms = None };
     }
     pub fn tick(&self) -> bool {
-        if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
-            if tm >= self.inner.dur {
-                self.reset();
-                return true;
-            }
+        if self.tmout() {
+            self.reset();
+            return true;
         }
         false
     }
 
     pub fn tmout(&self) -> bool {
-        if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
-            if tm >= self.inner.dur {
-                return true;
-            }
+        let tms = match self.inner.tms {
+            Some(tms) => tms,
+            None => return true,
+        };
+        let tmx = Instant::now().duration_since(tms);
+        if tmx >= self.inner.dur {
+            return true;
         }
         false
     }
 
     pub fn tmdur(&self) -> Duration {
-        if let Ok(tm) = SystemTime::now().duration_since(self.inner.tms) {
-            tm
-        } else {
-            Duration::ZERO
+        match self.inner.tms {
+            Some(tms) => Instant::now().duration_since(tms),
+            None => Duration::ZERO,
         }
     }
 }

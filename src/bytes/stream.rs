@@ -85,14 +85,10 @@ impl ByteSteamBuf {
         if self.get_max() > 0 {
             loop {
                 self.done_err()?;
-                let lkv = self.buf.read().await;
-                if lkv.len() <= self.get_max() {
+                if self.buf.read().await.len() <= self.get_max() {
                     break;
                 }
-                std::mem::drop(lkv);
-                // self.wkr1.wait_timeout(self.tmout.clone());
-                asyncs::timeout(self.tmout.clone(), self.wkr_can_write.clone()).await;
-                // self.wkr1.notify_all();
+                let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_write.clone()).await;
             }
         }
         self.done_err()?;
@@ -105,14 +101,10 @@ impl ByteSteamBuf {
         if self.get_max() > 0 {
             loop {
                 self.done_err()?;
-                let lkv = self.buf.read().await;
-                if lkv.len() <= self.get_max() {
+                if self.buf.read().await.len() <= self.get_max() {
                     break;
                 }
-                std::mem::drop(lkv);
-                // self.wkr1.wait_timeout(self.tmout.clone());
-                asyncs::timeout(self.tmout.clone(), self.wkr_can_write.clone()).await;
-                // self.wkr1.notify_all();
+                let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_write.clone()).await;
             }
         }
         self.done_err()?;
@@ -123,14 +115,10 @@ impl ByteSteamBuf {
     }
     pub async fn pull(&self) -> Option<ByteBox> {
         while !self.done() {
-            let lkv = self.buf.read().await;
-            if lkv.len() > 0 {
+            if self.buf.read().await.len() > 0 {
                 break;
             }
-            std::mem::drop(lkv);
-            // self.wkr2.wait_timeout(self.tmout.clone());
-            asyncs::timeout(self.tmout.clone(), self.wkr_can_read.clone()).await;
-            // self.wkr2.notify_all();
+            let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
         }
         let mut lkv = self.buf.write().await;
         let rts = lkv.pull();

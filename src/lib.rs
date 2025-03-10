@@ -34,7 +34,7 @@ struct CtxInner {
     parent: Option<Context>,
     doned: AtomicBool,
 
-    times: time::SystemTime,
+    times: time::Instant,
     timeout: Option<time::Duration>,
 }
 
@@ -43,7 +43,7 @@ impl CtxInner {
         Self {
             parent: prt,
             doned: AtomicBool::new(false),
-            times: time::SystemTime::now(),
+            times: time::Instant::now(),
             timeout: None,
         }
     }
@@ -70,10 +70,9 @@ impl Context {
             }
         };
         if let Some(v) = &self.inner.timeout {
-            if let Ok(vs) = time::SystemTime::now().duration_since(self.inner.times) {
-                if vs.gt(v) {
-                    return true;
-                }
+            let vs = time::Instant::now().duration_since(self.inner.times);
+            if vs.gt(v) {
+                return true;
             }
         }
         self.inner.doned.load(Ordering::SeqCst)
