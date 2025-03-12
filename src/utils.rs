@@ -464,24 +464,36 @@ pub fn md5strs<S: AsRef<[u8]>>(input: S) -> String {
     let ms = md5::compute(input);
     format!("{:x}", ms)
 }
-#[cfg(feature = "sha1")]
+#[cfg(feature = "sha")]
+pub use crypto::digest::Digest as CryptoDigest;
+#[cfg(feature = "sha")]
+pub use crypto::sha1::Sha1 as CryptoSha1;
+#[cfg(feature = "sha")]
+pub use crypto::sha2::Sha256 as CryptoSha256;
+/* #[cfg(feature = "sha")]
 pub fn sha1str<S: Into<String>>(input: S) -> String {
-    use crypto::digest::Digest;
     let mut hld = crypto::sha1::Sha1::new();
     hld.input(input.into().as_bytes());
     hld.result_str()
-}
-#[cfg(feature = "sha1")]
-pub fn sha1strs<S: AsRef<[u8]>>(input: S) -> String {
-    use crypto::digest::Digest;
+} */
+#[cfg(feature = "sha")]
+pub fn sha1str<S: AsRef<[u8]>>(input: S) -> String {
     let mut hld = crypto::sha1::Sha1::new();
     hld.input(input.as_ref());
     hld.result_str()
 }
-#[cfg(feature = "sha1")]
-pub use crypto::digest::Digest as CryptoDigest;
-#[cfg(feature = "sha1")]
-pub use crypto::sha1::Sha1 as CryptoSha1;
+/* #[cfg(feature = "sha")]
+pub fn sha256str<S: Into<String>>(input: S) -> String {
+    let mut hld = crypto::sha2::Sha256::new();
+    hld.input(input.into().as_bytes());
+    hld.result_str()
+} */
+#[cfg(feature = "sha")]
+pub fn sha256str<S: AsRef<[u8]>>(input: S) -> String {
+    let mut hld = crypto::sha2::Sha256::new();
+    hld.input(input.as_ref());
+    hld.result_str()
+}
 
 pub fn times() -> (Duration, i8) {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {

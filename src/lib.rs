@@ -297,6 +297,16 @@ mod tests {
         let signs = crate::sha1str(srcs);
         println!("sha1s:{}", &signs);
     }
+    #[test]
+    fn sha256s() {
+        let md5s = "48c4a8a547cadf2e245e867bcb4c27a6";
+        let tms = crate::strftime(SystemTime::now(), "%+");
+        let rands = crate::randoms();
+        let srcs = format!("{}{}{}{}", &md5s, &tms, &rands, "asdfasdf");
+        println!("srcs:{}", &srcs);
+        let signs = crate::sha256str(srcs);
+        println!("sha256s:{}", &signs);
+    }
 
     #[test]
     fn defs() {
