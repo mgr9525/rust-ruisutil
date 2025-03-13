@@ -60,7 +60,7 @@ where
                         Some(ioe) => Err(crate::ioerr(format!("{}", ioe), Some(ioe.kind()))),
                         None => Err(crate::ioerr(format!("other err found:{}", e), None)),
                     },
-                    None => Err(crate::ioerr("not err found", None)),
+                    None => Err(crate::ioerr(format!("not err found:{}", e), None)),
                 }
                 /* if let Some(ioe) = e.source().and_then(|v| v.downcast_ref::<std::io::Error>()) {
                     Err(std::io::Error::new(ioe.kind(), ioe))
