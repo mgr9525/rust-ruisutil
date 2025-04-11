@@ -74,14 +74,15 @@ impl ByteSteamBuf {
         lkv.clear();
         self.notify_all();
     }
-    pub async fn push_all(&self, data: &ByteBoxBuf) -> io::Result<()> {
+    pub async fn push_all(&self, data: &ByteBoxBuf) -> io::Result<usize> {
+        let mut ln = 0;
         for v in data.iter() {
-            self.push(v.clone()).await?;
+            ln += self.push(v.clone()).await?;
         }
-        Ok(())
+        Ok(ln)
     }
 
-    pub async fn push_front<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
+    pub async fn push_front<T: Into<ByteBox>>(&self, data: T) -> io::Result<usize> {
         if self.get_max() > 0 {
             loop {
                 self.done_err()?;
@@ -93,11 +94,13 @@ impl ByteSteamBuf {
         }
         self.done_err()?;
         let mut lkv = self.buf.write().await;
-        lkv.push_front(data);
+        let dt = data.into();
+        let ln = dt.len();
+        lkv.push_front(dt);
         self.notify_all_can_read();
-        Ok(())
+        Ok(ln)
     }
-    pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<()> {
+    pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<usize> {
         if self.get_max() > 0 {
             loop {
                 self.done_err()?;
@@ -109,9 +112,11 @@ impl ByteSteamBuf {
         }
         self.done_err()?;
         let mut lkv = self.buf.write().await;
-        lkv.push(data);
+        let dt = data.into();
+        let ln = dt.len();
+        lkv.push(dt);
         self.notify_all_can_read();
-        Ok(())
+        Ok(ln)
     }
     pub async fn pull(&self) -> Option<ByteBox> {
         while !self.done() {

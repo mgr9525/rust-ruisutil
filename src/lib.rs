@@ -552,4 +552,18 @@ mod tests {
         });
         println!("main end");
     } */
+    #[test]
+    fn pths() {
+        use std::path::PathBuf;
+
+        let mut path = PathBuf::new();
+        path.push("/opt/cdnsky/data");
+        path.push("/../node.yml"); // 使用相对路径进行连接
+
+        // 获取绝对路径
+        match path.canonicalize() {
+            Ok(v) => println!("Absolute path: {:?}", v),
+            Err(e) => println!("path:{:?},err={}", &path, &e),
+        }
+    }
 }
