@@ -38,8 +38,8 @@ impl ByteSteamBuf {
             wk_can_write: None,
         }
     }
-    pub fn done(&self) -> bool {
-        self.ctx.done()
+    pub fn ctx(&self) -> &crate::Context {
+        &self.ctx
     }
     pub fn done_err(&self) -> std::io::Result<()> {
         match self.ctx.done_err() {
@@ -66,7 +66,7 @@ impl ByteSteamBuf {
                 break;
             }
             std::mem::drop(lkv);
-            asyncs::timeout(Duration::from_millis(200), self.wkr_can_write.clone()).await;
+            let _ = asyncs::timeout(Duration::from_millis(200), self.wkr_can_write.clone()).await;
         }
     }
     pub async fn clear(&self) {
@@ -119,7 +119,7 @@ impl ByteSteamBuf {
         Ok(ln)
     }
     pub async fn pull(&self) -> Option<ByteBox> {
-        while !self.done() {
+        while !self.ctx.done() {
             if self.buf.read().await.len() > 0 {
                 break;
             }
@@ -136,7 +136,7 @@ impl ByteSteamBuf {
         sz: usize,
     ) -> io::Result<ByteBoxBuf> {
         self.more_max(sz).await;
-        while !self.done() {
+        while !self.ctx.done() {
             if let Some(v) = ctx {
                 v.done_err()?;
             }
@@ -146,7 +146,7 @@ impl ByteSteamBuf {
             }
             std::mem::drop(lkv);
             // self.wkr2.wait_timeout(self.tmout.clone());
-            asyncs::timeout(self.tmout.clone(), self.wkr_can_read.clone()).await;
+            let _ = asyncs::timeout(self.tmout.clone(), self.wkr_can_read.clone()).await;
         }
         let mut lkv = self.buf.write().await;
         let rts = lkv.cut_front(sz);
