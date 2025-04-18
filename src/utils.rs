@@ -198,7 +198,7 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
     if eln <= 0 {
         eln = 1024 * 5;
     }
-    loop {
+    while buf.len() < eln {
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
