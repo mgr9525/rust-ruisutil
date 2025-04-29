@@ -458,6 +458,12 @@ mod tests {
     }
 
     #[test]
+    fn xids() {
+        let xid = crate::xid_unsafe();
+        println!("xid:{}", &xid);
+    }
+
+    #[test]
     fn hex() {
         crate::print_hex(&vec![0xaa, 0xb3, 0x0a, 0x0c, 0x00]);
     }

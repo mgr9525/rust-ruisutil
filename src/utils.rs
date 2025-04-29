@@ -6,11 +6,41 @@ use std::{
     error,
     io::{self, Read, Write},
     net,
-    str::FromStr,
     time::{Duration, SystemTime},
 };
 
 use crate::Context;
+
+pub fn xid_unsafe() -> String {
+    let mut rt = String::with_capacity(12);
+    let (tms, _) = times();
+    // let tmi = (tms.as_nanos() & 0xffffffff_ffffffff) as i64;
+    let tmi = i2_byte(tms.as_nanos() as i64, 8);
+    let ids = i2_byte(std::process::id() as i64, 4);
+    for i in 0..tmi.len() {
+        let (c1, c2) = u8_to_hexs(tmi[i]);
+        rt.push(c1);
+        rt.push(c2);
+    }
+    for i in 0..ids.len() {
+        let (c1, c2) = u8_to_hexs(ids[i]);
+        rt.push(c1);
+        rt.push(c2);
+    }
+    rt
+}
+pub fn u8_to_hexs(byte: u8) -> (char, char) {
+    let high_nibble = (byte >> 4) & 0x0F; // 高 4 位
+    let low_nibble = byte & 0x0F; // 低 4 位
+    (u8_to_hex_char(high_nibble), u8_to_hex_char(low_nibble))
+}
+fn u8_to_hex_char(byte: u8) -> char {
+    match byte {
+        0..=9 => (b'0' + byte) as char,             // 0-9 直接转 '0'-'9'
+        10..=15 => (b'a' + byte - 10) as char,      // 10-15 转 'a'-'f'
+        _ => panic!("Invalid hex digit: {}", byte), // 0-15 之外的输入报错
+    }
+}
 
 pub fn byte_2i(bts: &[u8]) -> i64 {
     let mut rt = 0i64;
