@@ -507,7 +507,7 @@ pub fn times() -> (Duration, i8) {
 pub fn tms_since(tm_new: SystemTime, tm_old: SystemTime) -> Duration {
     match tm_new.duration_since(tm_old) {
         Ok(n) => n,
-        Err(_) => Duration::default(),
+        Err(_) => Duration::ZERO,
     }
 }
 pub fn tms_now_since(tm_old: SystemTime) -> Duration {
