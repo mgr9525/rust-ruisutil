@@ -26,6 +26,12 @@ impl Timer {
     pub fn reinit(&self) {
         unsafe { self.inner.muts().tms = None };
     }
+    pub fn set_dur(&self, dur: Duration) {
+        unsafe { self.inner.muts().dur = dur };
+    }
+    pub fn get_dur(&self) -> Duration {
+        self.inner.dur
+    }
     pub fn tick(&self) -> bool {
         if self.tmout() {
             self.reset();
