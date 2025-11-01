@@ -179,8 +179,10 @@ impl ByteSteamBuf {
         self.wkr1.notify_one();
     } */
     pub async fn len(&self) -> usize {
-        let lkv = self.buf.read().await;
-        lkv.len()
+        self.buf.read().await.len()
+    }
+    pub async fn frtlen(&self) -> usize {
+        self.buf.read().await.frtlen()
     }
     pub fn get_max(&self) -> usize {
         self.max.load(Ordering::SeqCst)

@@ -233,6 +233,13 @@ impl ByteBoxBuf {
     pub fn len(&self) -> usize {
         self.count
     }
+    pub fn frtlen(&self) -> usize {
+        if let Some(v) = self.list.front() {
+            v.len()
+        } else {
+            0
+        }
+    }
     pub fn lens(&self) -> usize {
         let mut rts = 0;
         let itr = self.list.iter();
