@@ -99,14 +99,40 @@ pub fn async_fn<'a, T>(
     std::pin::pin!(f).poll(cx)
 }
 
-/* pub struct AsyncFnFuture<'a, T> {
-    inner: std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>,
+pub struct AsyncFnFuture<'a, T> {
+    wkr: Option<std::task::Waker>,
+    inner: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send+Sync + 'a>>>,
 }
 impl<'a, T> AsyncFnFuture<'a, T> {
-    pub fn new(f: impl Future<Output = T> + Send + 'a) -> Self {
-        Self { inner: Box::pin(f) }
+    pub fn new() -> Self {
+        Self {
+            wkr: None,
+            inner: None,
+        }
     }
-    pub fn polls(&'a mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<T> {
-        std::pin::pin!(self.inner.as_mut()).poll(cx)
+    pub fn is_none(&self) -> bool {
+        self.inner.is_none()
     }
-} */
+    pub fn set(&mut self, f: impl Future<Output = T> + Send+Sync + 'a) {
+        self.inner = Some(Box::pin(f));
+        if let Some(wkr) = self.wkr.take() {
+            wkr.wake();
+            self.wkr = None;
+        }
+    }
+    pub fn clear(&mut self) {
+        self.inner = None;
+    }
+    pub fn polls(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<T> {
+        if self.inner.is_none() {
+            self.wkr = Some(cx.waker().clone());
+            return std::task::Poll::Pending;
+        }
+        let rst = std::pin::pin!(self.inner.as_mut().unwrap()).poll(cx);
+        match rst {
+            std::task::Poll::Ready(_) => self.inner = None,
+            _ => {}
+        }
+        rst
+    }
+}
