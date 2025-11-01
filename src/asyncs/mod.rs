@@ -129,8 +129,8 @@ impl<'a, T> AsyncFnFuture<'a, T> {
             return std::task::Poll::Pending;
         }
         let rst = std::pin::pin!(self.inner.as_mut().unwrap()).poll(cx);
-        match rst {
-            std::task::Poll::Ready(_) => self.inner = None,
+        match &rst {
+            std::task::Poll::Ready(_v) => self.inner = None,
             _ => {}
         }
         rst
