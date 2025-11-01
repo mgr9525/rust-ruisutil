@@ -91,8 +91,8 @@ impl<T, F: FnMut(&mut std::task::Context<'_>) -> std::task::Poll<T>> Future for 
 }
 
 pub fn async_fn<'a, T>(
-    f: impl Future<Output = T> + Send + 'a,
     cx: &mut std::task::Context<'_>,
+    f: impl Future<Output = T> + Send + 'a,
 ) -> std::task::Poll<T> {
     // let inner = Box::pin(f);
     // inner.as_mut().poll(cx)
