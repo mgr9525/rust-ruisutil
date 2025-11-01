@@ -2,14 +2,10 @@ use std::{
     collections::{linked_list, LinkedList},
     io::{self, Read, Write},
     ops::Deref,
-    sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
-    },
-    time::Duration,
+    sync::Arc,
 };
 
-use crate::{ioerr, sync::WakerFut};
+use crate::ioerr;
 
 #[derive(Clone)]
 pub struct ByteBox {

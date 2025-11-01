@@ -68,3 +68,42 @@ pub async fn waitctxs(ctx: &crate::Context, tms: std::time::Duration) {
     let cx = crate::Context::with_timeout(Some(ctx.clone()), tms);
     waitctx(&cx).await
 }
+
+/// Creates a future from a function that returns `Poll`.
+pub fn poll_fn<T, F: FnMut(&mut std::task::Context<'_>) -> T>(f: F) -> PollFn<F> {
+    PollFn(f)
+}
+
+/// The future created by `poll_fn`.
+pub struct PollFn<F>(F);
+
+impl<F> Unpin for PollFn<F> {}
+
+impl<T, F: FnMut(&mut std::task::Context<'_>) -> std::task::Poll<T>> Future for PollFn<F> {
+    type Output = T;
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        (self.0)(cx)
+    }
+}
+
+pub struct AsyncFnFuture<T> {
+    inner: std::pin::Pin<Box<dyn Future<Output = T> + Send>>,
+}
+impl<T> AsyncFnFuture<T> {
+    pub fn new(f: impl Future<Output = T> + Send + 'static) -> Self {
+        Self { inner: Box::pin(f) }
+    }
+}
+impl<T> Future for AsyncFnFuture<T> {
+    type Output = T;
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        self.inner.as_mut().poll(cx)
+    }
+}
