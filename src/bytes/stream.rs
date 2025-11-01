@@ -142,17 +142,11 @@ impl ByteSteamBuf {
             None => None,
             Some(mut bts) => {
                 if bts.len() > max {
-                    // lkv.cut_front(max)
-                    match bts.cuts(max) {
-                        Err(e) => None,
-                        Ok(obts) => {
-                            lkv.push_front(obts);
-                            Some(bts)
-                        }
+                    if let Ok(obts) = bts.cut(max) {
+                        lkv.push_front(obts);
                     }
-                } else {
-                    Some(bts)
                 }
+                Some(bts)
             }
         };
         self.notify_all_can_write();
