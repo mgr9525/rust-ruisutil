@@ -101,7 +101,7 @@ pub fn async_fn<'a, T>(
 
 pub struct AsyncFnFuture<'a, T> {
     wkr: Option<std::task::Waker>,
-    inner: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send+Sync + 'a>>>,
+    inner: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>>,
 }
 impl<'a, T> AsyncFnFuture<'a, T> {
     pub fn new() -> Self {
@@ -113,7 +113,7 @@ impl<'a, T> AsyncFnFuture<'a, T> {
     pub fn is_none(&self) -> bool {
         self.inner.is_none()
     }
-    pub fn set(&mut self, f: impl Future<Output = T> + Send+Sync + 'a) {
+    pub fn set(&mut self, f: impl Future<Output = T> + Send + Sync + 'a) {
         self.inner = Some(Box::pin(f));
         if let Some(wkr) = self.wkr.take() {
             wkr.wake();
@@ -130,7 +130,7 @@ impl<'a, T> AsyncFnFuture<'a, T> {
         }
         let rst = std::pin::pin!(self.inner.as_mut().unwrap()).poll(cx);
         match &rst {
-            std::task::Poll::Ready(_v) => self.inner = None,
+            std::task::Poll::Ready(_v) => self.clear(),
             _ => {}
         }
         rst
