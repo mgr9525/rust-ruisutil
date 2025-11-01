@@ -130,6 +130,34 @@ impl ByteSteamBuf {
         self.notify_all_can_write();
         rts
     }
+    pub async fn pull_max(&self, max: usize) -> Option<ByteBox> {
+        while !self.ctx.done() {
+            if self.buf.read().await.len() > 0 {
+                break;
+            }
+            let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
+        }
+        let mut lkv = self.buf.write().await;
+        let rts = match lkv.pull() {
+            None => None,
+            Some(mut bts) => {
+                if bts.len() > max {
+                    // lkv.cut_front(max)
+                    match bts.cuts(max) {
+                        Err(e) => None,
+                        Ok(obts) => {
+                            lkv.push_front(obts);
+                            Some(bts)
+                        }
+                    }
+                } else {
+                    Some(bts)
+                }
+            }
+        };
+        self.notify_all_can_write();
+        rts
+    }
     pub async fn pull_size(
         &self,
         ctx: Option<&crate::Context>,
@@ -152,10 +180,6 @@ impl ByteSteamBuf {
         let rts = lkv.cut_front(sz);
         self.notify_all_can_write();
         rts
-        /* match lkv.cut_front(sz) {
-            Err(e) => Err(e),
-            Ok(v) => Ok(v.to_bytes()),
-        } */
     }
     fn notify_all_can_read(&self) {
         self.wkr_can_read.notify_all();
