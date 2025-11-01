@@ -90,15 +90,15 @@ impl<T, F: FnMut(&mut std::task::Context<'_>) -> std::task::Poll<T>> Future for 
     }
 }
 
-pub struct AsyncFnFuture<T> {
-    inner: std::pin::Pin<Box<dyn Future<Output = T> + Send>>,
+pub struct AsyncFnFuture<'a, T> {
+    inner: std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>,
 }
-impl<T> AsyncFnFuture<T> {
-    pub fn new(f: impl Future<Output = T> + Send + 'static) -> Self {
+impl<'a, T> AsyncFnFuture<'a, T> {
+    pub fn new(f: impl Future<Output = T> + Send + 'a) -> Self {
         Self { inner: Box::pin(f) }
     }
 }
-impl<T> Future for AsyncFnFuture<T> {
+impl<'a, T> Future for AsyncFnFuture<'a, T> {
     type Output = T;
     fn poll(
         mut self: std::pin::Pin<&mut Self>,
