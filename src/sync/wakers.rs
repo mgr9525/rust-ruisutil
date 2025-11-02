@@ -96,7 +96,10 @@ impl Future for WakerFut {
         }
         let mut lkv = match this.inner.ticks.try_lock() {
             Ok(v) => v,
-            Err(_) => return std::task::Poll::Pending,
+            Err(_) => {
+                cx.waker().wake_by_ref();
+                return std::task::Poll::Pending;
+            }
         };
         if let Some(vs) = &this.wk {
             if !vs.will_wake(cx.waker()) {
