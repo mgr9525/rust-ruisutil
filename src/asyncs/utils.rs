@@ -43,26 +43,30 @@ pub fn async_fn<'a, T>(
 
 /// 不适合高并发,谨慎使用
 pub struct AsyncFnFuture<'a, T> {
-    synced: bool,
     fut: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>>,
-    futs: Arc<
-        std::sync::Mutex<Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>>>,
+    futs: Option<
+        Arc<
+            std::sync::Mutex<Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>>>,
+        >,
     >,
 }
 impl<'a, T> AsyncFnFuture<'a, T> {
     pub fn new(synced: bool) -> Self {
         Self {
-            synced: synced,
             fut: None,
-            futs: Arc::new(std::sync::Mutex::new(None)),
+            futs: if synced {
+                Some(Arc::new(std::sync::Mutex::new(None)))
+            } else {
+                None
+            },
         }
     }
     pub fn polls(
         &mut self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<T>> {
-        if self.synced {
-            let mut lkv = match self.futs.try_lock() {
+        if let Some(ft) = &self.futs {
+            let mut lkv = match ft.try_lock() {
                 Ok(lkv) => lkv,
                 Err(_) => {
                     cx.waker().wake_by_ref();
@@ -102,8 +106,8 @@ impl<'a, T> AsyncFnFuture<'a, T> {
     where
         F: Future<Output = T> + Send + Sync + 'a,
     {
-        if self.synced {
-            let mut lkv = match self.futs.try_lock() {
+        if let Some(ft) = &self.futs {
+            let mut lkv = match ft.try_lock() {
                 Ok(lkv) => lkv,
                 Err(_) => {
                     return Err(crate::ioerr("lock futs error", None));
@@ -117,8 +121,7 @@ impl<'a, T> AsyncFnFuture<'a, T> {
     }
 }
 
-/// 适合高并发, 但不宜过多
-pub struct AsyncMapFuture<'a, T> {
+/* pub struct AsyncMapFuture<'a, T> {
     curmax: usize,
     durout: std::time::Duration,
     tmr: crate::Timer,
@@ -217,4 +220,4 @@ impl<'a, T> AsyncMapFuture<'a, T> {
         });
         Ok(())
     }
-}
+} */
