@@ -57,14 +57,10 @@ impl<'a, T> AsyncFnFuture<'a, T> {
             futs: Arc::new(std::sync::Mutex::new(None)),
         }
     }
-    pub fn polls<F>(
+    pub fn polls(
         &mut self,
         cx: &mut std::task::Context<'_>,
-        fc: impl FnOnce() -> F,
-    ) -> std::task::Poll<T>
-    where
-        F: Future<Output = T> + Send + Sync + 'a,
-    {
+    ) -> std::task::Poll<std::io::Result<T>> {
         if self.synced {
             let mut lkv = match self.futs.try_lock() {
                 Ok(lkv) => lkv,
@@ -75,27 +71,49 @@ impl<'a, T> AsyncFnFuture<'a, T> {
             };
             if lkv.is_none() {
                 // self.wkr = Some(cx.waker().clone());
-                *lkv = Some(Box::pin(fc()));
+                return std::task::Poll::Ready(Err(crate::ioerr("no future", None)));
             }
             let rst = std::pin::pin!(lkv.as_mut().unwrap()).poll(cx);
-            match &rst {
-                std::task::Poll::Ready(_v) => *lkv = None,
-                _ => {}
+            match rst {
+                std::task::Poll::Ready(v) => {
+                    *lkv = None;
+                    std::task::Poll::Ready(Ok(v))
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
             }
-            rst
         } else {
             if self.fut.is_none() {
                 // self.wkr = Some(cx.waker().clone());
                 // return std::task::Poll::Pending;
-                self.fut = Some(Box::pin(fc()));
+                // self.fut = Some(Box::pin(fc()));
+                return std::task::Poll::Ready(Err(crate::ioerr("no future", None)));
             }
             let rst = std::pin::pin!(self.fut.as_mut().unwrap()).poll(cx);
-            match &rst {
-                std::task::Poll::Ready(_v) => self.fut = None,
-                _ => {}
+            match rst {
+                std::task::Poll::Ready(v) => {
+                    self.fut = None;
+                    std::task::Poll::Ready(Ok(v))
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
             }
-            rst
         }
+    }
+    pub fn setpoll<F>(&mut self, fc: impl FnOnce() -> F) -> std::io::Result<()>
+    where
+        F: Future<Output = T> + Send + Sync + 'a,
+    {
+        if self.synced {
+            let mut lkv = match self.futs.try_lock() {
+                Ok(lkv) => lkv,
+                Err(_) => {
+                    return Err(crate::ioerr("lock futs error", None));
+                }
+            };
+            *lkv = Some(Box::pin(fc()));
+        } else {
+            self.fut = Some(Box::pin(fc()));
+        }
+        Ok(())
     }
 }
 
@@ -121,14 +139,10 @@ impl<'a, T> AsyncMapFuture<'a, T> {
             futmps: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
-    pub fn polls<F>(
+    pub fn polls(
         &mut self,
         cx: &mut std::task::Context<'_>,
-        fc: impl FnOnce() -> F,
-    ) -> std::task::Poll<T>
-    where
-        F: Future<Output = T> + Send + Sync + 'a,
-    {
+    ) -> std::task::Poll<std::io::Result<T>> {
         // let key = cx.waker().clone().data() as usize;
         let mut lkv = match self.futmps.try_lock() {
             Ok(lkv) => lkv,
@@ -168,28 +182,39 @@ impl<'a, T> AsyncMapFuture<'a, T> {
         }
         if let Some(i) = idx {
             let rst = std::pin::pin!(lkv[i].fut.as_mut()).poll(cx);
-            match &rst {
-                std::task::Poll::Ready(_v) => {
+            match rst {
+                std::task::Poll::Ready(v) => {
                     lkv.remove(i);
+                    std::task::Poll::Ready(Ok(v))
                 }
-                std::task::Poll::Pending => {}
+                std::task::Poll::Pending => std::task::Poll::Pending,
             }
-            rst
         } else {
-            let mut fut = Box::pin(fc());
-            let rst = std::pin::pin!(fut.as_mut()).poll(cx);
-            match &rst {
-                std::task::Poll::Ready(_v) => {}
-                std::task::Poll::Pending => {
-                    lkv.push(AsyncMapItem {
-                        ln: 0,
-                        tms: std::time::Instant::now(),
-                        wkr: cx.waker().clone(),
-                        fut: fut,
-                    });
-                }
-            }
-            rst
+            std::task::Poll::Ready(Err(crate::ioerr("poll error,no future", None)))
         }
+    }
+
+    pub fn setpoll<F>(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+        fc: impl FnOnce() -> F,
+    ) -> std::io::Result<()>
+    where
+        F: Future<Output = T> + Send + Sync + 'a,
+    {
+        let mut lkv = match self.futmps.try_lock() {
+            Ok(lkv) => lkv,
+            Err(_) => {
+                return Err(crate::ioerr("lock futmps error", None));
+            }
+        };
+        let fut = Box::pin(fc());
+        lkv.push(AsyncMapItem {
+            ln: 0,
+            tms: std::time::Instant::now(),
+            wkr: cx.waker().clone(),
+            fut: fut,
+        });
+        Ok(())
     }
 }
