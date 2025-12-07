@@ -155,24 +155,31 @@ pub fn tcp_write(ctx: &Context, stream: &mut net::TcpStream, bts: &[u8]) -> io::
     }
 }
 
-#[cfg(any(feature = "asyncs", feature = "tokios"))]
+/* #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn fut_tmout_ctxend0<F, T>(ctx: &Context, future: F) -> std::io::Result<T>
 where
     F: core::future::Future<Output = std::io::Result<T>>,
 {
     fut_tmout_ctxends(ctx, Duration::from_secs(3), Box::pin(future)).await
-}
+} */
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
-pub async fn fut_tmout_ctxend0s<F, T>(ctx: &Context, future: F) -> std::io::Result<T>
+pub async fn fut_tmout_ctxend0<F, T>(ctx: &Context, future: F) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = std::io::Result<T>> + Unpin,
+    F: core::future::Future<Output = std::io::Result<T>>,
 {
     fut_tmout_ctxends(ctx, Duration::from_secs(3), future).await
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn fut_tmout_ctxend100<F, T>(ctx: &Context, future: F) -> std::io::Result<T>
+where
+    F: core::future::Future<Output = std::io::Result<T>>,
+{
+    fut_tmout_ctxends(ctx, Duration::from_millis(100), Box::pin(future)).await
+}
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn fut_tmout_ctxend<F, T>(ctx: &Context, mut secs: u64, future: F) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = std::io::Result<T>> + Unpin,
+    F: core::future::Future<Output = std::io::Result<T>>,
 {
     if secs < 3 {
         secs = 3;
@@ -186,13 +193,14 @@ pub async fn fut_tmout_ctxends<F, T>(
     mut future: F,
 ) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = std::io::Result<T>> + Unpin,
+    F: core::future::Future<Output = std::io::Result<T>>,
 {
     if drt < Duration::from_millis(10) {
         drt = Duration::from_millis(10);
     }
+    let mut pined = std::pin::pin!(future);
     while !ctx.done() {
-        match timeoutios(drt, &mut future).await {
+        match timeoutios(drt, &mut pined).await {
             Ok(v) => return Ok(v),
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::TimedOut {
