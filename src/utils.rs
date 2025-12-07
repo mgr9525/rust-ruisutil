@@ -190,7 +190,7 @@ where
 pub async fn fut_tmout_ctxends<F, T>(
     ctx: &Context,
     mut drt: Duration,
-    mut future: F,
+    future: F,
 ) -> std::io::Result<T>
 where
     F: core::future::Future<Output = std::io::Result<T>>,
