@@ -1,12 +1,16 @@
-pub use bytes::ByteBox;
+// pub use bytes::ByteBox;
+pub use ::bytes::Buf;
+pub use ::bytes::BufMut;
+pub use ::bytes::Bytes;
+pub use ::bytes::BytesMut;
 pub use bytes::ByteBoxBuf;
 pub use circle::CircleBuf;
-#[cfg(any(feature = "asyncs",feature="tokios"))]
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub use stream::ByteSteamBuf;
 
 mod bytes;
 mod circle;
-#[cfg(any(feature = "asyncs",feature="tokios"))]
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
 mod stream;
 
 pub fn conv_human_readable(sz: u64) -> String {

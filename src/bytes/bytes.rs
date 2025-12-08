@@ -5,9 +5,11 @@ use std::{
     sync::Arc,
 };
 
+use bytes::BufMut;
+
 use crate::ioerr;
 
-#[derive(Clone)]
+/* #[derive(Clone)]
 pub struct ByteBox {
     start: usize,
     end: usize,
@@ -153,12 +155,12 @@ impl From<&[u8]> for ByteBox {
     fn from(v: &[u8]) -> Self {
         Self::from(v.to_vec())
     }
-}
+} */
 
 #[derive(Clone)]
 pub struct ByteBoxBuf {
     count: usize,
-    list: LinkedList<ByteBox>,
+    list: LinkedList<bytes::Bytes>,
 }
 impl ByteBoxBuf {
     pub fn new() -> Self {
@@ -167,14 +169,14 @@ impl ByteBoxBuf {
             list: LinkedList::new(),
         }
     }
-    pub fn push_front<T: Into<ByteBox>>(&mut self, data: T) {
+    pub fn push_front<T: Into<bytes::Bytes>>(&mut self, data: T) {
         let dt = data.into();
         if dt.len() > 0 {
             self.count += dt.len();
             self.list.push_front(dt);
         }
     }
-    pub fn push<T: Into<ByteBox>>(&mut self, data: T) {
+    pub fn push<T: Into<bytes::Bytes>>(&mut self, data: T) {
         let dt = data.into();
         if dt.len() > 0 {
             self.count += dt.len();
@@ -186,9 +188,10 @@ impl ByteBoxBuf {
             self.push(v.clone());
         }
     }
-    pub fn pushs(&mut self, dt: Arc<Box<[u8]>>, start: usize, end: usize) {
-        let data = ByteBox::new(dt, start, end);
-        self.push(data);
+    pub fn pushs(&mut self, mut dt: Vec<u8>, n: usize) {
+        // let data = bytes::Bytes::new(dt, start, end);
+        dt.truncate(n);
+        self.push(dt);
     }
     /* pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
         let ln = dt.len();
@@ -207,7 +210,7 @@ impl ByteBoxBuf {
 
         ln
     } */
-    pub fn pull(&mut self) -> Option<ByteBox> {
+    pub fn pull(&mut self) -> Option<bytes::Bytes> {
         match self.list.pop_front() {
             None => None,
             Some(v) => {
@@ -227,7 +230,7 @@ impl ByteBoxBuf {
         self.list.clear();
         self.count = 0;
     }
-    pub fn iter(&self) -> linked_list::Iter<ByteBox> {
+    pub fn iter(&self) -> linked_list::Iter<bytes::Bytes> {
         self.list.iter()
     }
     pub fn len(&self) -> usize {
@@ -315,7 +318,16 @@ impl ByteBoxBuf {
         }
         let mut pos_real = pos;
         while let Some(mut v) = self.pull() {
-            let ln = v.len();
+            let dt = v.split_to(pos_real);
+            if v.len() > 0 {
+                self.push_front(v);
+            }
+            pos_real -= dt.len();
+            frt.push(dt);
+            if pos_real <= 0 {
+                break;
+            }
+            /* let ln = v.len();
             if pos_real < ln {
                 let rgt = v.cuts(pos_real)?;
                 frt.push(rgt);
@@ -327,7 +339,7 @@ impl ByteBoxBuf {
                 if pos_real <= 0 {
                     break;
                 }
-            }
+            } */
         }
 
         Ok(frt)
@@ -343,26 +355,29 @@ impl ByteBoxBuf {
         }
         rtbts.into_boxed_slice()
     } */
-    pub fn to_bytes(&self) -> Box<[u8]> {
-        let mut pos = 0usize;
-        let mut rtbts = vec![0u8; self.count].into_boxed_slice();
+    pub fn to_bytes(&self) -> bytes::Bytes {
+        let mut buf = bytes::BytesMut::with_capacity(self.count);
+        // let mut pos = 0usize;
+        // let mut rtbts = vec![0u8; self.count].into_boxed_slice();
         let itr = self.list.iter();
         // while let Some(v) = itr.next() {
         for v in itr {
-            let end = pos + v.len();
-            (&mut rtbts[pos..end]).copy_from_slice(&v[..]);
-            pos = end;
+            buf.put(v.clone());
+            // let end = pos + v.len();
+            // (&mut rtbts[pos..end]).copy_from_slice(&v[..]);
+            // pos = end;
         }
-        rtbts
+        buf.freeze()
+        // rtbts
     }
-    pub fn to_byte_box(&self) -> ByteBox {
+    /* pub fn to_byte_box(&self) -> bytes::Bytes {
         if self.list.len() == 1 {
             if let Some(bts) = self.list.front() {
                 return bts.clone();
             }
         }
-        ByteBox::from(self.to_bytes())
-    }
+        bytes::Bytes::from(self.to_bytes())
+    } */
 }
 
 impl Read for ByteBoxBuf {
@@ -374,29 +389,22 @@ impl Read for ByteBoxBuf {
                 it.len(),
                 self.len()
             ); */
-            if buf.len() == it.len() {
-                buf.copy_from_slice(&it[..]);
-                return Ok(it.len());
-            } else if buf.len() > it.len() {
-                let bufs = &mut buf[..it.len()];
-                bufs.copy_from_slice(&it[..it.len()]);
-                return Ok(it.len());
-            } else if buf.len() < it.len() {
-                if let Ok(rgt) = it.cut(buf.len()) {
-                    self.push_front(rgt);
-                }
-                buf.copy_from_slice(&it[..]);
-                return Ok(it.len());
+            let dt = it.split_to(buf.len());
+            if it.len() > 0 {
+                self.push_front(it);
             }
+            buf.copy_from_slice(&dt[..]);
         };
         Ok(0)
     }
 }
 impl Write for ByteBoxBuf {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut bts = vec![0u8; buf.len()].into_boxed_slice();
+        let bts = bytes::Bytes::copy_from_slice(buf);
+        self.push(bts);
+        /* let mut bts = vec![0u8; buf.len()].into_boxed_slice();
         bts.copy_from_slice(buf);
-        self.push(Arc::new(bts));
+        self.push(Arc::new(bts)); */
         Ok(buf.len())
     }
 

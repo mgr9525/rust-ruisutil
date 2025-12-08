@@ -9,7 +9,7 @@ use asyncs::sync::RwLock;
 
 use crate::{asyncs, sync::WakerFut};
 
-use super::{ByteBox, ByteBoxBuf};
+use super::ByteBoxBuf;
 
 pub struct ByteSteamBuf {
     ctx: crate::Context,
@@ -82,7 +82,7 @@ impl ByteSteamBuf {
         Ok(ln)
     }
 
-    pub async fn push_front<T: Into<ByteBox>>(&self, data: T) -> io::Result<usize> {
+    pub async fn push_front<T: Into<bytes::Bytes>>(&self, data: T) -> io::Result<usize> {
         if self.get_max() > 0 {
             loop {
                 self.done_err()?;
@@ -100,7 +100,7 @@ impl ByteSteamBuf {
         self.notify_all_can_read();
         Ok(ln)
     }
-    pub async fn push<T: Into<ByteBox>>(&self, data: T) -> io::Result<usize> {
+    pub async fn push<T: Into<bytes::Bytes>>(&self, data: T) -> io::Result<usize> {
         if self.get_max() > 0 {
             loop {
                 self.done_err()?;
@@ -118,7 +118,7 @@ impl ByteSteamBuf {
         self.notify_all_can_read();
         Ok(ln)
     }
-    pub async fn pull(&self) -> Option<ByteBox> {
+    pub async fn pull(&self) -> Option<bytes::Bytes> {
         while !self.ctx.done() {
             if self.buf.read().await.len() > 0 {
                 break;
@@ -130,7 +130,7 @@ impl ByteSteamBuf {
         self.notify_all_can_write();
         rts
     }
-    pub async fn pull_max(&self, max: usize) -> Option<ByteBox> {
+    pub async fn pull_max(&self, max: usize) -> Option<bytes::Bytes> {
         while !self.ctx.done() {
             if self.buf.read().await.len() > 0 {
                 break;
@@ -141,12 +141,11 @@ impl ByteSteamBuf {
         let rts = match lkv.pull() {
             None => None,
             Some(mut bts) => {
-                if bts.len() > max {
-                    if let Ok(obts) = bts.cut(max) {
-                        lkv.push_front(obts);
-                    }
+                let bt = bts.split_to(max);
+                if bts.len() > 0 {
+                    lkv.push_front(bts);
                 }
-                Some(bts)
+                Some(bt)
             }
         };
         self.notify_all_can_write();
@@ -227,20 +226,18 @@ impl ByteSteamBuf {
         lkv.get_byte(idx)
     }
 
-    async fn readbts(&self, ln: usize) -> std::io::Result<ByteBox> {
+    async fn readbts(&self, ln: usize) -> std::io::Result<bytes::Bytes> {
         match self.pull().await {
             None => Err(crate::ioerr(
                 "buff is closed?",
                 Some(std::io::ErrorKind::BrokenPipe),
             )),
             Some(mut it) => {
-                if ln < it.len() {
-                    let mut lkv = self.buf.write().await;
-                    if let Ok(rgt) = it.cut(ln) {
-                        lkv.push_front(rgt);
-                    }
+                let bt = it.split_to(ln);
+                if it.len() > 0 {
+                    self.buf.write().await.push_front(it);
                 }
-                Ok(it)
+                Ok(bt)
             }
         }
     }
@@ -319,7 +316,8 @@ impl crate::asyncs::AsyncRead for ByteSteamBuf {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
             std::task::Poll::Ready(Ok(it)) => {
-                buf.put_slice(&it[..]);
+                use bytes::BufMut;
+                buf.put(it);
                 Ok(())
             }
         };
@@ -335,7 +333,8 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, io::Error>> {
         self.wk_can_write = Some(cx.waker().clone());
-        let rst = match std::pin::pin!(self.push(buf)).poll(cx) {
+        let bts = bytes::Bytes::copy_from_slice(buf);
+        let rst = match std::pin::pin!(self.push(bts)).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
             std::task::Poll::Ready(Ok(_)) => Ok(buf.len()),

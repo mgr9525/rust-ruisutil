@@ -240,12 +240,12 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        let mut data = vec![0u8; 1024].into_boxed_slice();
+        let mut data = vec![0u8; 1024];
         let n = fut_tmout_ctxend0(ctx, stream.read(&mut data[..])).await?;
         if n <= 0 {
             break;
         }
-        buf.pushs(Arc::new(data), 0, n);
+        buf.pushs(data, n);
     }
 
     Ok(buf)
@@ -346,12 +346,12 @@ pub fn read_allbuf<T: std::io::Read>(
         if ctx.done() {
             return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
         }
-        let mut data = vec![0u8; eln].into_boxed_slice();
+        let mut data = vec![0u8; eln];
         let n = stream.read(&mut data[..])?;
         if n <= 0 {
             break;
         }
-        buf.pushs(Arc::new(data), 0, n);
+        buf.pushs(data, n);
     }
 
     Ok(buf)

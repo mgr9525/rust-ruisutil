@@ -9,8 +9,6 @@ use std::{
     time::Duration,
 };
 
-use crate::bytes::ByteBox;
-
 #[derive(Clone)]
 pub struct FileSpliter {
     inner: crate::ArcMut<Inner>,
@@ -24,7 +22,7 @@ pub struct Config {
 struct Inner {
     ctx: crate::Context,
     cfg: Config,
-    buf: Mutex<crate::ListDequeMax<ByteBox>>,
+    buf: Mutex<crate::ListDequeMax<bytes::Bytes>>,
     wkr: crate::sync::Waker,
     flfd: Mutex<Option<File>>,
     flln: AtomicUsize,
@@ -227,7 +225,7 @@ impl FileSpliter {
     pub fn push(&self, bts: &[u8]) {
         self.pushbox(bts.to_vec());
     }
-    pub fn pushbox<T: Into<ByteBox>>(&self, bts: T) {
+    pub fn pushbox<T: Into<bytes::Bytes>>(&self, bts: T) {
         if let Ok(mut lkv) = self.inner.buf.lock() {
             lkv.push(bts.into());
             self.inner.wkr.notify_all();
