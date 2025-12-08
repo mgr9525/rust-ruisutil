@@ -188,10 +188,8 @@ impl ByteBoxBuf {
             self.push(v.clone());
         }
     }
-    pub fn pushs(&mut self, mut dt: Vec<u8>, n: usize) {
-        // let data = bytes::Bytes::new(dt, start, end);
-        dt.truncate(n);
-        self.push(dt);
+    pub fn pushs(&mut self, dt: Vec<u8>, n: usize) {
+        self.push(super::bytes_with_len(dt, n));
     }
     /* pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
         let ln = dt.len();

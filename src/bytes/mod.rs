@@ -1,8 +1,5 @@
 // pub use bytes::ByteBox;
-pub use ::bytes::Buf;
-pub use ::bytes::BufMut;
-pub use ::bytes::Bytes;
-pub use ::bytes::BytesMut;
+pub use ::bytes::*;
 pub use bytes::ByteBoxBuf;
 pub use circle::CircleBuf;
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
@@ -23,6 +20,27 @@ pub fn conv_human_readable(sz: u64) -> String {
         return format!("{:.2}KB", szf / 1024f64);
     }
     return format!("{}B", sz);
+}
+
+pub fn bytes_with_len(mut bts: Vec<u8>, n: usize) -> Bytes {
+    if n <= 0 {
+        return bts.into();
+    }
+    bts.truncate(n);
+    bts.into()
+}
+
+pub trait BytesCut: Buf {
+    fn cuts(&mut self, pos: usize) -> std::io::Result<Bytes>;
+}
+
+impl BytesCut for Bytes {
+    fn cuts(&mut self, pos: usize) -> std::io::Result<Bytes> {
+        if pos > self.len() {
+            return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
+        }
+        Ok(self.split_to(pos))
+    }
 }
 
 #[cfg(test)]

@@ -271,7 +271,8 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
         buf: &[u8],
     ) -> std::task::Poll<io::Result<usize>> {
         self.wk_can_write = Some(cx.waker().clone());
-        let rst = match std::pin::pin!(self.push(buf)).poll(cx) {
+        let bts = bytes::Bytes::copy_from_slice(buf);
+        let rst = match std::pin::pin!(self.push(bts)).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
             std::task::Poll::Ready(Ok(_)) => Ok(buf.len()),
