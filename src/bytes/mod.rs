@@ -32,6 +32,7 @@ pub fn bytes_with_len(mut bts: Vec<u8>, n: usize) -> Bytes {
 
 pub trait BytesCut: Buf {
     fn cuts(&mut self, pos: usize) -> std::io::Result<Bytes>;
+    fn split_tos(&mut self, pos: usize) -> Bytes;
 }
 
 impl BytesCut for Bytes {
@@ -40,6 +41,10 @@ impl BytesCut for Bytes {
             return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
         }
         Ok(self.split_to(pos))
+    }
+    fn split_tos(&mut self, pos: usize) -> Bytes {
+        let n = pos.min(self.len());
+        self.split_to(n)
     }
 }
 

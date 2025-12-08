@@ -7,7 +7,7 @@ use std::{
 
 use bytes::BufMut;
 
-use crate::ioerr;
+use crate::{bytes::BytesCut, ioerr};
 
 /* #[derive(Clone)]
 pub struct ByteBox {
@@ -316,7 +316,7 @@ impl ByteBoxBuf {
         }
         let mut pos_real = pos;
         while let Some(mut v) = self.pull() {
-            let dt = v.split_to(pos_real);
+            let dt = v.split_tos(pos_real);
             if v.len() > 0 {
                 self.push_front(v);
             }
@@ -387,7 +387,7 @@ impl Read for ByteBoxBuf {
                 it.len(),
                 self.len()
             ); */
-            let dt = it.split_to(buf.len());
+            let dt = it.split_tos(buf.len());
             if it.len() > 0 {
                 self.push_front(it);
             }

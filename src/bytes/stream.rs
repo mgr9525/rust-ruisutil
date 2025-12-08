@@ -7,7 +7,7 @@ use std::{
 
 use asyncs::sync::RwLock;
 
-use crate::{asyncs, sync::WakerFut};
+use crate::{asyncs, bytes::BytesCut, sync::WakerFut};
 
 use super::ByteBoxBuf;
 
@@ -141,7 +141,7 @@ impl ByteSteamBuf {
         let rts = match lkv.pull() {
             None => None,
             Some(mut bts) => {
-                let bt = bts.split_to(max);
+                let bt = bts.split_tos(max);
                 if bts.len() > 0 {
                     lkv.push_front(bts);
                 }
@@ -233,7 +233,7 @@ impl ByteSteamBuf {
                 Some(std::io::ErrorKind::BrokenPipe),
             )),
             Some(mut it) => {
-                let bt = it.split_to(ln);
+                let bt = it.split_tos(ln);
                 if it.len() > 0 {
                     self.buf.write().await.push_front(it);
                 }
