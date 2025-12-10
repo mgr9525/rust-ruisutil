@@ -1,6 +1,6 @@
 use std::{
     future::Future,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU8, Ordering},
     task::Poll,
     time::Duration,
 };
@@ -155,6 +155,9 @@ impl Drop for WakerFut {
 }
 
 pub struct WakerOneFut {
+    inner: std::sync::Arc<WakerOneFutInner>,
+}
+struct WakerOneFutInner {
     done: AtomicBool,
     waker: futures::task::AtomicWaker,
 }
@@ -163,28 +166,27 @@ impl Future for WakerOneFut {
     type Output = ();
 
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<()> {
-        if self.done.load(Ordering::SeqCst) {
+        if self.inner.done.load(Ordering::SeqCst) {
+            self.inner.done.store(false, Ordering::SeqCst);
             return Poll::Ready(());
         }
 
-        self.waker.register(cx.waker());
-        if self.done.load(Ordering::SeqCst) {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
-        }
+        self.inner.waker.register(cx.waker());
+        Poll::Pending
     }
 }
 
 impl WakerOneFut {
     pub fn new() -> Self {
         Self {
-            done: AtomicBool::new(false),
-            waker: futures::task::AtomicWaker::new(),
+            inner: std::sync::Arc::new(WakerOneFutInner {
+                done: AtomicBool::new(false),
+                waker: futures::task::AtomicWaker::new(),
+            }),
         }
     }
     pub fn notify(&self) {
-        self.done.store(true, Ordering::SeqCst);
-        self.waker.wake();
+        self.inner.done.store(true, Ordering::SeqCst);
+        self.inner.waker.wake();
     }
 }
