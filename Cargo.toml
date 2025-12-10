@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 md5 = "0.7"
 bytes = "1"
+futures = {version = "0.3",optional = true}
 rust-crypto = {version="0.2.36", optional = true}
 # rand = "0.8.4"
 log = {version="0.4.*", features = ["std"], optional = true}
@@ -19,8 +20,8 @@ tokio = { version = "1", features = ["full"], optional = true }
 # default=["asyncs","times"]
 all=["asyncs","times","logs","filesplit","cryptos"]
 alltk=["tokios","times","logs","filesplit","cryptos"]
-asyncs=["async-std"]
-tokios=["tokio"]
+asyncs=["async-std","futures"]
+tokios=["tokio","futures"]
 times=["chrono"]
 logs=["log","filesplit","times"]
 cryptos=["sha"]

@@ -1,9 +1,7 @@
 use std::{
     future::Future,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Mutex,
-    },
+    sync::atomic::{AtomicBool, Ordering},
+    task::Poll,
     time::Duration,
 };
 
@@ -11,12 +9,12 @@ use crate::Context;
 
 pub struct WakerFut {
     wk: Option<std::task::Waker>,
-    inner: crate::ArcMut<Inner>,
+    inner: std::sync::Arc<Inner>,
 }
 
 struct Inner {
     ctx: Context,
-    ticks: Mutex<Vec<Item>>,
+    ticks: std::sync::Mutex<Vec<Item>>,
 }
 struct Item {
     ticked: AtomicBool,
@@ -36,9 +34,9 @@ impl WakerFut {
         // let (sx, rx) = channel::unbounded::<()>();
         Self {
             wk: None,
-            inner: crate::ArcMut::new(Inner {
+            inner: std::sync::Arc::new(Inner {
                 ctx: Context::background(Some(ctx.clone())),
-                ticks: Mutex::new(Vec::new()),
+                ticks: std::sync::Mutex::new(Vec::new()),
             }),
         }
     }
@@ -52,25 +50,27 @@ impl WakerFut {
         self.inner.ctx.stop();
         self.notify_all();
     }
-    pub fn notify_one(&self) {
-        let lkv = match self.inner.ticks.lock() {
+    pub fn notify_one(&self) -> bool {
+        let lkv = match self.inner.ticks.try_lock() {
             Ok(v) => v,
-            Err(_) => return,
+            Err(_) => return false,
         };
         if lkv.len() > 0 {
             lkv[0].ticked.store(true, Ordering::SeqCst);
             lkv[0].wk.wake_by_ref();
         }
+        true
     }
-    pub fn notify_all(&self) {
-        let lkv = match self.inner.ticks.lock() {
+    pub fn notify_all(&self) -> bool {
+        let lkv = match self.inner.ticks.try_lock() {
             Ok(v) => v,
-            Err(_) => return,
+            Err(_) => return false,
         };
         for v in &*lkv {
             v.ticked.store(true, Ordering::SeqCst);
             v.wk.wake_by_ref();
         }
+        true
     }
     fn checks(&self, it: &Item) -> bool {
         if self.done() {
@@ -151,5 +151,40 @@ impl Drop for WakerFut {
                 }
             }
         }
+    }
+}
+
+pub struct WakerOneFut {
+    done: AtomicBool,
+    waker: futures::task::AtomicWaker,
+}
+
+impl Future for WakerOneFut {
+    type Output = ();
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<()> {
+        if self.done.load(Ordering::SeqCst) {
+            return Poll::Ready(());
+        }
+
+        self.waker.register(cx.waker());
+        if self.done.load(Ordering::SeqCst) {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+impl WakerOneFut {
+    pub fn new() -> Self {
+        Self {
+            done: AtomicBool::new(false),
+            waker: futures::task::AtomicWaker::new(),
+        }
+    }
+    pub fn notify(&self) {
+        self.done.store(true, Ordering::SeqCst);
+        self.waker.wake();
     }
 }

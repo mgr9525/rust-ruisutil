@@ -3,6 +3,7 @@ mod wakers;
 
 pub use waker::Waker;
 pub use wakers::WakerFut;
+pub use wakers::WakerOneFut;
 
 #[cfg(test)]
 mod tests {
