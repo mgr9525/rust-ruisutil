@@ -26,10 +26,10 @@ impl Timer {
         }
     }
     pub fn reset(&self) {
-        let dur = self.inner.start_tm.elapsed();
+        let tms = self.inner.start_tm.elapsed();
         self.inner
             .tms
-            .store(dur.as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+            .store(tms.as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn reinit(&self) {
         self.inner
@@ -57,9 +57,16 @@ impl Timer {
         if tms <= 0 {
             return true;
         }
-        let tmsd = self.inner.start_tm + Duration::from_nanos(tms);
-        let tmx = Instant::now().duration_since(tmsd);
-        if tmx >= self.get_dur() {
+        let dur = self.inner.dur.load(std::sync::atomic::Ordering::Relaxed);
+        let tmsd = self.inner.start_tm.elapsed().as_nanos() as u64;
+        // let tmdur = tmsd+tms;
+        if tmsd >= tms+dur {
+            if tmsd > u64::MAX - 1000000 {
+                unsafe {
+                    self.inner.muts().start_tm = Instant::now();
+                }
+                self.reinit();
+            }
             return true;
         }
         false
