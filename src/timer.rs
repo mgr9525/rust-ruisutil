@@ -59,8 +59,7 @@ impl Timer {
         }
         let dur = self.inner.dur.load(std::sync::atomic::Ordering::Relaxed);
         let tmsd = self.inner.start_tm.elapsed().as_nanos() as u64;
-        // let tmdur = tmsd+tms;
-        if tmsd >= tms+dur {
+        if tmsd >= tms + dur {
             if tmsd > u64::MAX - 1000000 {
                 unsafe {
                     self.inner.muts().start_tm = Instant::now();
