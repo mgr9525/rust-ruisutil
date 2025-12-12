@@ -539,6 +539,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn tmrs() {
+        let tmr = crate::Timer::new(Duration::from_secs(3));
+        let tmr2 = crate::Timer::new(Duration::from_secs(20));
+        let tms = std::time::Instant::now();
+        tmr2.reset();
+        loop {
+            if tmr.tick() {
+                println!("ing: tms={:.3}", tms.elapsed().as_secs_f32());
+            }
+            if tmr2.tmout() {
+                println!("out: tms={:.3}", tms.elapsed().as_secs_f32());
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     /* #[test]
     fn catchs() {
         println!("main start");

@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    sync::atomic::AtomicU64,
+    time::{Duration, Instant},
+};
 
 use crate::ArcMut;
 
@@ -8,29 +11,38 @@ pub struct Timer {
 }
 
 struct Inner {
-    dur: Duration,
-    tms: Option<Instant>,
+    start_tm: Instant,
+    dur: AtomicU64,
+    tms: AtomicU64,
 }
 impl Timer {
     pub fn new(dur: Duration) -> Self {
         Self {
             inner: ArcMut::new(Inner {
-                dur: dur,
-                tms: None,
+                start_tm: Instant::now(),
+                dur: AtomicU64::new(dur.as_nanos() as u64),
+                tms: AtomicU64::new(0),
             }),
         }
     }
     pub fn reset(&self) {
-        unsafe { self.inner.muts().tms = Some(Instant::now()) };
+        let dur = self.inner.start_tm.elapsed();
+        self.inner
+            .tms
+            .store(dur.as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn reinit(&self) {
-        unsafe { self.inner.muts().tms = None };
+        self.inner
+            .tms
+            .store(0, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn set_dur(&self, dur: Duration) {
-        unsafe { self.inner.muts().dur = dur };
+        self.inner
+            .dur
+            .store(dur.as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn get_dur(&self) -> Duration {
-        self.inner.dur
+        Duration::from_nanos(self.inner.dur.load(std::sync::atomic::Ordering::Relaxed))
     }
     pub fn tick(&self) -> bool {
         if self.tmout() {
@@ -41,21 +53,24 @@ impl Timer {
     }
 
     pub fn tmout(&self) -> bool {
-        let tms = match self.inner.tms {
-            Some(tms) => tms,
-            None => return true,
-        };
-        let tmx = Instant::now().duration_since(tms);
-        if tmx >= self.inner.dur {
+        let tms = self.inner.tms.load(std::sync::atomic::Ordering::Relaxed);
+        if tms <= 0 {
+            return true;
+        }
+        let tmsd = self.inner.start_tm + Duration::from_nanos(tms);
+        let tmx = Instant::now().duration_since(tmsd);
+        if tmx >= self.get_dur() {
             return true;
         }
         false
     }
 
     pub fn tmdur(&self) -> Duration {
-        match self.inner.tms {
-            Some(tms) => Instant::now().duration_since(tms),
-            None => Duration::ZERO,
+        let tms = self.inner.tms.load(std::sync::atomic::Ordering::Relaxed);
+        if tms <= 0 {
+            return Duration::ZERO;
         }
+        let tmsd = self.inner.start_tm + Duration::from_nanos(tms);
+        Instant::now().duration_since(tmsd)
     }
 }
