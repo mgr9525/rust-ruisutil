@@ -162,6 +162,14 @@ struct WakerOneFutInner {
     waker: futures::task::AtomicWaker,
 }
 
+impl Clone for WakerOneFut {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl Future for WakerOneFut {
     type Output = ();
 
