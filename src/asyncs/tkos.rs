@@ -46,9 +46,9 @@ where
 pub async fn sleep(dur: std::time::Duration) {
     tokio::time::sleep(dur).await
 }
-pub async fn timeouts<F, T, E>(duration: std::time::Duration, future: F) -> std::io::Result<T>
+pub async fn timeouts<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = Result<T, std::io::Error>>,
+    F: core::future::Future<Output = std::io::Result<T>>,
 {
     match timeout(duration, future).await {
         Ok(v) => v,

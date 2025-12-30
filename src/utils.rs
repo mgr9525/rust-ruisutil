@@ -187,20 +187,17 @@ where
     fut_tmout_ctxends(ctx, Duration::from_secs(secs), future).await
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
-pub async fn fut_tmout_ctxends<F, T>(
-    ctx: &Context,
-    mut drt: Duration,
-    future: F,
-) -> std::io::Result<T>
+pub async fn fut_tmout_ctxends<F, T>(ctx: &Context, mut drt: Duration, fut: F) -> std::io::Result<T>
 where
     F: core::future::Future<Output = std::io::Result<T>>,
 {
     if drt < Duration::from_millis(10) {
         drt = Duration::from_millis(10);
     }
-    let mut pined = std::pin::pin!(future);
+
+    let mut pined = std::pin::pin!(fut);
     while !ctx.done() {
-        match timeoutios(drt, &mut pined).await {
+        match crate::asyncs::timeouts(drt, &mut pined).await {
             Ok(v) => return Ok(v),
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::TimedOut {
@@ -215,16 +212,7 @@ where
     ))
 }
 
-#[cfg(any(feature = "asyncs", feature = "tokios"))]
-pub async fn timeoutios<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
-where
-    F: core::future::Future<Output = std::io::Result<T>>,
-{
-    crate::asyncs::timeouts(duration, future).await
-}
-
 use crate::bytes;
-use std::sync::Arc;
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
@@ -258,7 +246,7 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
     ln: usize,
 ) -> io::Result<Box<[u8]>> {
     if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
+        return Ok(Vec::new().into_boxed_slice());
     }
     let mut rn = 0usize;
     let mut data = vec![0u8; ln];
