@@ -27,13 +27,13 @@ impl<T> Deref for ArcMut<T> {
         &self.inner
     }
 }
-impl<T> DerefMut for ArcMut<T> {
+/* impl<T> DerefMut for ArcMut<T> {
     // type Target = T;
 
     fn deref_mut(&mut self) -> &mut T {
         unsafe { self.muts() }
     }
-}
+} */
 impl<T> ArcMut<T> {
     pub fn new(t: T) -> Self {
         let inr = Arc::new(t);

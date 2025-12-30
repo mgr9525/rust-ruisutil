@@ -48,28 +48,11 @@ pub async fn sleep(dur: std::time::Duration) {
 }
 pub async fn timeouts<F, T, E>(duration: std::time::Duration, future: F) -> std::io::Result<T>
 where
-    F: core::future::Future<Output = Result<T, E>>,
-    E: std::error::Error,
+    F: core::future::Future<Output = Result<T, std::io::Error>>,
 {
     match timeout(duration, future).await {
-        Ok(v) => match v {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                match e.source() {
-                    Some(v) => match v.downcast_ref::<std::io::Error>() {
-                        Some(ioe) => Err(crate::ioerr(format!("{}", ioe), Some(ioe.kind()))),
-                        None => Err(crate::ioerr(format!("other err found:{}", e), None)),
-                    },
-                    None => Err(crate::ioerr(format!("not err found:{}", e), None)),
-                }
-                /* if let Some(ioe) = e.source().and_then(|v| v.downcast_ref::<std::io::Error>()) {
-                    Err(std::io::Error::new(ioe.kind(), ioe))
-                } else {
-                    Err(crate::ioerr("not err found", None))
-                } */
-            }
-        },
-        Err(e) => Err(crate::ioerr(
+        Ok(v) => v,
+        Err(_e) => Err(crate::ioerr(
             "future timed out",
             Some(std::io::ErrorKind::TimedOut),
         )),
