@@ -43,10 +43,10 @@ pub fn async_fn<'a, T>(
 
 /// 不适合高并发,谨慎使用
 pub struct AsyncFnFuture<'a, T> {
-    fut: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>>,
+    fut: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>>,
     futs: Option<
         Arc<
-            std::sync::Mutex<Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>>>,
+            std::sync::Mutex<Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>>>,
         >,
     >,
 }
@@ -104,7 +104,7 @@ impl<'a, T> AsyncFnFuture<'a, T> {
     }
     pub fn setpoll<F>(&mut self, fc: impl FnOnce() -> F) -> std::io::Result<()>
     where
-        F: Future<Output = T> + Send + Sync + 'a,
+        F: Future<Output = T> + Send + 'a,
     {
         if let Some(ft) = &self.futs {
             let mut lkv = match ft.try_lock() {
@@ -118,6 +118,9 @@ impl<'a, T> AsyncFnFuture<'a, T> {
             self.fut = Some(Box::pin(fc()));
         }
         Ok(())
+    }
+    pub fn is_nopoll(&self) -> bool {
+        self.fut.is_none() && self.futs.is_none()
     }
 }
 
