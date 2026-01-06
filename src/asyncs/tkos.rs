@@ -46,15 +46,18 @@ where
 pub async fn sleep(dur: std::time::Duration) {
     tokio::time::sleep(dur).await
 }
-pub async fn timeouts<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
+pub async fn timeouts<F, T>(
+    duration: std::time::Duration,
+    future: F,
+) -> Result<std::io::Result<T>, crate::errs::Error>
 where
     F: core::future::Future<Output = std::io::Result<T>>,
 {
     match timeout(duration, future).await {
-        Ok(v) => v,
-        Err(_e) => Err(crate::ioerr(
+        Ok(v) => Ok(v),
+        Err(_e) => Err(crate::errs::Error::new(
             "future timed out",
-            Some(std::io::ErrorKind::TimedOut),
+            std::io::ErrorKind::TimedOut,
         )),
     }
 }

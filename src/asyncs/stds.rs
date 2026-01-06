@@ -37,11 +37,28 @@ where
 pub async fn sleep(dur: std::time::Duration) {
     async_std::task::sleep(dur).await
 }
-pub async fn timeouts<F, T>(duration: std::time::Duration, future: F) -> std::io::Result<T>
+pub async fn timeouts<F, T>(
+    duration: std::time::Duration,
+    future: F,
+) -> Result<std::io::Result<T>, crate::errs::Error>
 where
-    F: core::future::Future<Output = Result<T, std::io::Error>>,
+    F: core::future::Future<Output = std::io::Result<T>>,
 {
-    timeout(duration, future).await
+    match timeout(duration, future).await {
+        Ok(v) => Ok(Ok(v)),
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::TimedOut {
+                let msg = format!("{}", e);
+                if msg == "future timed out" {
+                    Err(crate::errs::Error::new(msg, std::io::ErrorKind::TimedOut))
+                } else {
+                    Ok(Err(e))
+                }
+            } else {
+                Ok(Err(e))
+            }
+        }
+    }
 }
 
 /* pub fn tcp_shutdownw(conn: &mut net::TcpStream) -> std::io::Result<()> {

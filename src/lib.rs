@@ -16,6 +16,7 @@ pub mod asyncs;
 pub mod bytes;
 pub mod conf;
 mod contianer;
+pub mod errs;
 #[cfg(feature = "filesplit")]
 pub mod filesplit;
 mod list;
@@ -599,5 +600,54 @@ mod tests {
             Ok(v) => println!("Absolute path: {:?}", v),
             Err(e) => println!("path:{:?},err={}", &path, &e),
         }
+    }
+    #[test]
+    fn tmouts() {
+        let _ = crate::asyncs::block_on(async move {
+            match crate::asyncs::timeouts(Duration::from_millis(100), async move {
+                return Err(crate::ioerr("test io err", None));
+                Ok(())
+            })
+            .await
+            {
+                Ok(v) => println!("ok:{:?}", v),
+                Err(e) => println!("ruisutil err:{:?}", e),
+            }
+            match crate::asyncs::timeouts(Duration::from_millis(100), async move {
+                crate::asyncs::sleep(Duration::from_secs(1)).await;
+                Ok(())
+            })
+            .await
+            {
+                Ok(v) => println!("ok:{:?}", v),
+                Err(e) => println!("ruisutil err:{:?}", e),
+            }
+            Ok(())
+        });
+    }
+    #[test]
+    fn tmoutfuts() {
+        let _ = crate::asyncs::block_on(async move {
+            let ctx = Context::background(None);
+            match crate::fut_tmout_ctxend100(&ctx, async move {
+                return Err(crate::ioerr("test io err", None));
+                Ok(())
+            })
+            .await
+            {
+                Ok(v) => println!("ok:{:?}", v),
+                Err(e) => println!("ruisutil err:{:?}", e),
+            }
+            match crate::fut_tmout_ctxend100(&ctx, async move {
+                crate::asyncs::sleep(Duration::from_secs(2)).await;
+                Ok(())
+            })
+            .await
+            {
+                Ok(v) => println!("ok:{:?}", v),
+                Err(e) => println!("ruisutil err:{:?}", e),
+            }
+            Ok(())
+        });
     }
 }

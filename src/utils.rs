@@ -198,11 +198,12 @@ where
     let mut pined = std::pin::pin!(fut);
     while !ctx.done() {
         match crate::asyncs::timeouts(drt, &mut pined).await {
-            Ok(v) => return Ok(v),
+            Ok(v) => return v,
             Err(e) => {
-                if e.kind() != std::io::ErrorKind::TimedOut {
-                    return Err(e);
+                if e.kind != std::io::ErrorKind::TimedOut {
+                    return Err(e.into());
                 }
+                // return Err(e.into());
             }
         }
     }
