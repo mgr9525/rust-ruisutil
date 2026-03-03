@@ -317,8 +317,7 @@ impl crate::asyncs::AsyncRead for ByteSteamBuf {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             std::task::Poll::Ready(Err(e)) => Err(e),
             std::task::Poll::Ready(Ok(it)) => {
-                use bytes::BufMut;
-                buf.put(it);
+                buf.put_slice(&it);
                 Ok(())
             }
         };
