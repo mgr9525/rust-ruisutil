@@ -1,8 +1,11 @@
 mod waker;
-mod wakers;
-
 pub use waker::Waker;
+
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+mod wakers;
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub use wakers::WakerFut;
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub use wakers::WakerOneFut;
 
 #[cfg(test)]
@@ -39,7 +42,8 @@ mod tests {
     #[test]
     fn waker_fut() {
         async_std::task::block_on(async move {
-            let wkr = crate::sync::WakerFut::new(&crate::Context::background(None));
+            let ctx = crate::asyncs::Context::new();
+            let wkr = crate::sync::WakerFut::new(&ctx);
             let wkrc = wkr.clone();
             async_std::task::spawn(async move {
                 async_std::task::sleep(Duration::from_secs(5)).await;

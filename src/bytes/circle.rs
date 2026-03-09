@@ -330,7 +330,7 @@ impl Write for CircleBuf {
         let bufs = self.borrow_write_buf(buf.len())?;
         let ln = bufs.len();
         bufs.copy_from_slice(&buf[..bufs.len()]);
-        std::mem::drop(bufs);
+        let _=bufs;
         self.borrow_write_ok(ln)?;
         Ok(ln)
     }

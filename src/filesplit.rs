@@ -139,7 +139,7 @@ impl FileSpliter {
                 if self.inner.flln.load(Ordering::SeqCst) > max {
                     // self.copyfl(v);
                     // v.seek(std::io::SeekFrom::Start(0))?;
-                    std::mem::drop(v);
+                    let _ = v;
                     **lkv = None;
                     std::thread::sleep(Duration::from_millis(10));
                     self.movefls();

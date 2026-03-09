@@ -12,7 +12,7 @@ use crate::{asyncs, bytes::BytesCut, sync::WakerFut};
 use super::ByteBoxBuf;
 
 pub struct ByteSteamBuf {
-    ctx: crate::Context,
+    ctx: crate::asyncs::Context,
     buf: RwLock<ByteBoxBuf>,
     max: AtomicUsize,
     tmout: Duration,
@@ -24,10 +24,9 @@ pub struct ByteSteamBuf {
 }
 
 impl ByteSteamBuf {
-    pub fn new(ctx: &crate::Context, max: usize, tmout: Duration) -> Self {
-        let ctx = crate::Context::background(Some(ctx.clone()));
+    pub fn new(ctx: &crate::asyncs::Context, max: usize, tmout: Duration) -> Self {
         Self {
-            ctx: ctx.clone(),
+            ctx: ctx.child(),
             buf: RwLock::new(ByteBoxBuf::new()),
             max: AtomicUsize::new(max),
             tmout: tmout,
@@ -38,36 +37,39 @@ impl ByteSteamBuf {
             wk_can_write: None,
         }
     }
-    pub fn ctx(&self) -> &crate::Context {
+    pub fn ctx(&self) -> &crate::asyncs::Context {
         &self.ctx
     }
     pub fn done_err(&self) -> std::io::Result<()> {
-        match self.ctx.done_err() {
-            Ok(_) => Ok(()),
-            Err(e) => Err(crate::ioerr(
+        match self.ctx.cancelled() {
+            true => Ok(()),
+            false => Err(crate::ioerr(
                 "close chan!!!",
                 Some(io::ErrorKind::BrokenPipe),
             )),
         }
     }
     pub fn close(&self) {
-        self.ctx.stop();
+        self.ctx.cancel();
         self.wkr_can_read.close();
         self.wkr_can_write.close();
     }
     pub async fn waits(&self, tmout: Option<Duration>) {
         let ctxs = match tmout {
-            Some(v) => crate::Context::with_timeout(Some(self.ctx.clone()), v),
+            Some(v) => self.ctx.child_timeout(v),
             None => self.ctx.clone(),
         };
-        while !ctxs.done() {
-            let lkv = self.buf.read().await;
-            if lkv.len() <= 0 {
-                break;
+        ctxs.wait_futs(async {
+            loop {
+                if self.buf.read().await.len() <= 0 {
+                    break;
+                }
+                let _ =
+                    asyncs::timeout(Duration::from_millis(200), self.wkr_can_write.clone()).await;
             }
-            std::mem::drop(lkv);
-            let _ = asyncs::timeout(Duration::from_millis(200), self.wkr_can_write.clone()).await;
-        }
+            Ok(())
+        })
+        .await;
     }
     pub async fn clear(&self) {
         let mut lkv = self.buf.write().await;
@@ -119,24 +121,36 @@ impl ByteSteamBuf {
         Ok(ln)
     }
     pub async fn pull(&self) -> Option<bytes::Bytes> {
-        while !self.ctx.done() {
-            if self.buf.read().await.len() > 0 {
-                break;
-            }
-            let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
-        }
+        let _ = self
+            .ctx
+            .wait_futs(async {
+                loop {
+                    if self.buf.read().await.len() > 0 {
+                        break;
+                    }
+                    let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
+                }
+                Ok(())
+            })
+            .await;
         let mut lkv = self.buf.write().await;
         let rts = lkv.pull();
         self.notify_all_can_write();
         rts
     }
     pub async fn pull_max(&self, max: usize) -> Option<bytes::Bytes> {
-        while !self.ctx.done() {
-            if self.buf.read().await.len() > 0 {
-                break;
-            }
-            let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
-        }
+        let _ = self
+            .ctx
+            .wait_futs(async {
+                loop {
+                    if self.buf.read().await.len() > 0 {
+                        break;
+                    }
+                    let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
+                }
+                Ok(())
+            })
+            .await;
         let mut lkv = self.buf.write().await;
         let rts = match lkv.pull() {
             None => None,
@@ -153,23 +167,26 @@ impl ByteSteamBuf {
     }
     pub async fn pull_size(
         &self,
-        ctx: Option<&crate::Context>,
+        ctx: Option<&crate::asyncs::Context>,
         sz: usize,
     ) -> io::Result<ByteBoxBuf> {
         self.more_max(sz).await;
-        while !self.ctx.done() {
-            if let Some(v) = ctx {
-                v.done_err()?;
-            }
-            let lkv = self.buf.read().await;
-            if lkv.len() >= sz {
-                break;
-            }
-            std::mem::drop(lkv);
-            // self.wkr2.wait_timeout(self.tmout.clone());
-            let _ = asyncs::timeout(self.tmout.clone(), self.wkr_can_read.clone()).await;
-        }
+        let _ = self
+            .ctx
+            .wait_futs(async {
+                loop {
+                    if self.buf.read().await.len() > sz {
+                        break;
+                    }
+                    let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
+                }
+                Ok(())
+            })
+            .await;
         let mut lkv = self.buf.write().await;
+        if lkv.len() < sz {
+            return Err(io::Error::new(io::ErrorKind::BrokenPipe, "buff is closed?"));
+        }
         let rts = lkv.cut_front(sz);
         self.notify_all_can_write();
         rts
@@ -284,7 +301,7 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<io::Result<()>> {
-        if self.ctx.done() {
+        if self.ctx.cancelled() {
             return std::task::Poll::Ready(Err(crate::ioerr(
                 "buff is closed?",
                 Some(std::io::ErrorKind::BrokenPipe),
@@ -346,7 +363,7 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), io::Error>> {
-        if self.ctx.done() {
+        if self.ctx.cancelled() {
             return std::task::Poll::Ready(Err(crate::ioerr(
                 "buff is closed?",
                 Some(std::io::ErrorKind::BrokenPipe),

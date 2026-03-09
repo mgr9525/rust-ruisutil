@@ -2,10 +2,9 @@ use std::{
     future::Future,
     sync::atomic::{AtomicBool, AtomicU8, Ordering},
     task::Poll,
-    time::Duration,
 };
 
-use crate::Context;
+use crate::asyncs::Context;
 
 pub struct WakerFut {
     wk: Option<std::task::Waker>,
@@ -35,19 +34,19 @@ impl WakerFut {
         Self {
             wk: None,
             inner: std::sync::Arc::new(Inner {
-                ctx: Context::background(Some(ctx.clone())),
+                ctx: ctx.child(),
                 ticks: std::sync::Mutex::new(Vec::new()),
             }),
         }
     }
     pub fn done(&self) -> bool {
-        self.inner.ctx.done()
+        self.inner.ctx.cancelled()
     }
     pub fn close(&self) {
-        if self.inner.ctx.done() {
+        if self.done() {
             return;
         }
-        self.inner.ctx.stop();
+        self.inner.ctx.cancel();
         self.notify_all();
     }
     pub fn notify_one(&self) -> bool {
