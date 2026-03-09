@@ -48,7 +48,7 @@ impl Context {
         // panic!("unimplemented");
     }
 
-    pub fn new_timeout(&self, tmd: Duration) -> Self {
+    pub fn new_timeout(tmd: Duration) -> Self {
         let source = CancellationTokenSource::new();
         Self {
             src: source.clone(),
