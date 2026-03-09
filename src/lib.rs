@@ -650,4 +650,35 @@ mod tests {
             Ok(())
         });
     }
+    #[test]
+    fn tkotmoutfuts() {
+        let _ = crate::asyncs::block_on(async move {
+            let ctx = crate::asyncs::Context::new();
+            let ctxc=ctx.clone();
+            match ctx
+                .wait_futs(async move {
+                    crate::asyncs::sleep(Duration::from_secs(5)).await;
+                    ctxc.cancel(); // 注释掉第二个任务可以变成超时
+                    return Err(crate::ioerr("test io err", None));
+                    Ok(())
+                })
+                .await
+            {
+                Ok(v) => println!("ok:{:?}", v),
+                Err(e) => println!("ruisutil err:{:?}", e),
+            }
+            let ctxc = ctx.child_timeout(Duration::from_secs(2));
+            match ctxc
+                .wait_futs(async move {
+                    crate::asyncs::sleep(Duration::from_secs(7)).await;
+                    Ok(())
+                })
+                .await
+            {
+                Ok(v) => println!("ok:{:?}", v),
+                Err(e) => println!("ruisutil err:{:?}", e),
+            }
+            Ok(())
+        });
+    }
 }
