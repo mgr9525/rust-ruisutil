@@ -83,7 +83,7 @@ impl Context {
         }
     }
 
-    pub fn is_cancelled(&self) -> bool {
+    pub fn cancelled(&self) -> bool {
         self.token.is_cancelled()
     }
 
