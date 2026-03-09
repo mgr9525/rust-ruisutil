@@ -99,11 +99,9 @@ impl Context {
         // 宏会自动 pin fut
         tokio::select! {
             _ = self.cancelled_future() => {
-                // ctx 开头不能改了哦
                 Err(crate::ioerr("ctx cancel", Some(std::io::ErrorKind::Interrupted)))
             },
             _ = self.timeout_future() => {
-                // ctx 开头不能改了哦
                 Err(crate::ioerr("ctx timeout", Some(std::io::ErrorKind::TimedOut)))
             },
             v = fut => {
