@@ -59,7 +59,7 @@ impl ByteSteamBuf {
             Some(v) => self.ctx.child_timeout(v),
             None => self.ctx.clone(),
         };
-        ctxs.wait_futs(async {
+        let _ = ctxs.wait_futs(async {
             loop {
                 if self.buf.read().await.len() <= 0 {
                     break;

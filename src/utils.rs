@@ -225,16 +225,19 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
     if ln <= 0 {
         return Ok(buf);
     }
-    while buf.len() < ln {
-        let mut data = vec![0u8; 1024];
-        let n = ctx.wait_futs( stream.read(&mut data[..])).await?;
-        if n <= 0 {
-            break;
+    ctx.wait_futs(async {
+        while buf.len() < ln {
+            let mut data = vec![0u8; 1024];
+            let n = stream.read(&mut data[..]).await?;
+            if n <= 0 {
+                break;
+            }
+            buf.pushs(data, n);
         }
-        buf.pushs(data, n);
-    }
 
-    Ok(buf)
+        Ok(buf)
+    })
+    .await
 }
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
@@ -246,26 +249,29 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
     if ln <= 0 {
         return Ok(Vec::new().into_boxed_slice());
     }
-    let mut rn = 0usize;
-    let mut data = vec![0u8; ln];
-    while rn < ln {
-        match ctx.wait_futs(stream.read(&mut data[rn..])).await {
-            Ok(n) => {
-                if n > 0 {
-                    rn += n;
-                } else {
-                    // let bts=&data[..];
-                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        format!("read err len:{}!", n),
-                    ));
+    ctx.wait_futs(async {
+        let mut rn = 0usize;
+        let mut data = vec![0u8; ln];
+        while rn < ln {
+            match stream.read(&mut data[rn..]).await {
+                Ok(n) => {
+                    if n > 0 {
+                        rn += n;
+                    } else {
+                        // let bts=&data[..];
+                        // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                        return Err(io::Error::new(
+                            io::ErrorKind::UnexpectedEof,
+                            format!("read err len:{}!", n),
+                        ));
+                    }
                 }
+                Err(e) => return Err(e),
             }
-            Err(e) => return Err(e),
         }
-    }
-    Ok(data.into_boxed_slice())
+        Ok(data.into_boxed_slice())
+    })
+    .await
 }
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
@@ -278,19 +284,22 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
     if sz <= 0 {
         return Ok(0);
     }
-    let mut wn = 0usize;
-    while wn < sz {
-        let n = ctx.wait_futs(stream.write(&bts[wn..])).await?;
-        if n > 0 {
-            wn += n;
-        } else {
-            // let bts=&data[..];
-            // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
-            return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+    ctx.wait_futs(async {
+        let mut wn = 0usize;
+        while wn < sz {
+            let n = stream.write(&bts[wn..]).await?;
+            if n > 0 {
+                wn += n;
+            } else {
+                // let bts=&data[..];
+                // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                return Err(io::Error::new(io::ErrorKind::Other, "write err!"));
+            }
         }
-    }
-    stream.flush().await?;
-    Ok(wn)
+        stream.flush().await?;
+        Ok(wn)
+    })
+    .await
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn write_allbuf_async<T: asyncs::AsyncWriteExt + Unpin>(
