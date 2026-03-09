@@ -689,8 +689,8 @@ mod tests {
                 Ok(v) => println!("ok:{:?}", v),
                 Err(e) => println!("ruisutil err:{:?}", e),
             }
-            let ctxc = ctx.child_timeout(Duration::from_secs(2));
-            match ctxc
+            match ctx
+                .child_timeout(Duration::from_secs(2))
                 .wait_futs(async move {
                     crate::asyncs::sleep(Duration::from_secs(7)).await;
                     Ok(())
