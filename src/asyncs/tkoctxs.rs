@@ -1,8 +1,8 @@
-use std::time::{Duration, Instant};
-use tokio_util::sync::CancellationToken;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
+use std::time::{Duration, Instant};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct Context {
@@ -70,7 +70,7 @@ impl Context {
     pub fn timeout_future(&self) -> impl Future<Output = ()> + '_ {
         if let Some(dur) = self.timeout_dur {
             let elapsed = self.time_start.elapsed();
-            
+
             if elapsed >= dur {
                 // 时间已经过了，返回一个立即完成的 Future (Ready)
                 Either::Left(std::future::ready(()))
@@ -125,6 +125,23 @@ where
                 Either::Right(r) => Pin::new_unchecked(r).poll(cx),
                 Either::Pending => Poll::Pending,
             }
+        }
+    }
+}
+
+impl From<Option<Context>> for Context {
+    fn from(prt: Option<Context>) -> Self {
+        match prt {
+            Some(v) => v.child(),
+            None => Self::new(),
+        }
+    }
+}
+impl From<&Option<Context>> for Context {
+    fn from(prt: &Option<Context>) -> Self {
+        match prt {
+            Some(v) => v.child(),
+            None => Self::new(),
         }
     }
 }

@@ -653,8 +653,10 @@ mod tests {
     #[test]
     fn tkotmoutfuts() {
         let _ = crate::asyncs::block_on(async move {
-            let ctx = crate::asyncs::Context::new();
-            let ctxc=ctx.clone();
+            // let ctx = crate::asyncs::Context::new();
+            let prt: Option<crate::asyncs::Context> = None;
+            let ctx: crate::asyncs::Context = prt.into();
+            let ctxc = ctx.clone();
             match ctx
                 .wait_futs(async move {
                     crate::asyncs::sleep(Duration::from_secs(5)).await;
