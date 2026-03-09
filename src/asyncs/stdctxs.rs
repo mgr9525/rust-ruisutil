@@ -48,12 +48,20 @@ impl Context {
         // panic!("unimplemented");
     }
 
-    pub fn with_timeout(&self, tmd: Duration) -> Self {
+    pub fn new_timeout(&self, tmd: Duration) -> Self {
+        let source = CancellationTokenSource::new();
         Self {
-            src: self.src.clone(),
-            token: self.create_child_token(),
+            src: source.clone(),
+            token: source.token(),
             time_start: Instant::now(),
             timeout_dur: Some(tmd),
+        }
+    }
+
+    pub fn prt_with_timeout(v: &Option<Self>, tmd: Duration) -> Self {
+        match v {
+            Some(v) => v.child_timeout(tmd),
+            None => Self::new_timeout(tmd),
         }
     }
 
@@ -125,7 +133,7 @@ impl Context {
                 v
             },
         } */
-       panic!("unimplemented");
+        panic!("unimplemented");
     }
 }
 
@@ -155,6 +163,23 @@ where
                 Either::Right(r) => Pin::new_unchecked(r).poll(cx),
                 Either::Pending => Poll::Pending,
             }
+        }
+    }
+}
+
+impl From<Option<Context>> for Context {
+    fn from(prt: Option<Context>) -> Self {
+        match prt {
+            Some(v) => v.child(),
+            None => Self::new(),
+        }
+    }
+}
+impl From<&Option<Context>> for Context {
+    fn from(prt: &Option<Context>) -> Self {
+        match prt {
+            Some(v) => v.child(),
+            None => Self::new(),
         }
     }
 }

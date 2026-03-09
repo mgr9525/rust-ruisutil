@@ -26,11 +26,18 @@ impl Context {
         self.token.child_token()
     }
 
-    pub fn with_timeout(&self, tmd: Duration) -> Self {
+    pub fn new_timeout(tmd: Duration) -> Self {
         Self {
-            token: self.create_child_token(),
-            time_start: Instant::now(), // 子上下文重新计时
+            token: CancellationToken::new(),
+            time_start: Instant::now(),
             timeout_dur: Some(tmd),
+        }
+    }
+
+    pub fn prt_with_timeout(v: &Option<Self>, tmd: Duration) -> Self {
+        match v {
+            Some(v) => v.child_timeout(tmd),
+            None => Self::new_timeout(tmd),
         }
     }
 
@@ -45,7 +52,7 @@ impl Context {
     pub fn child_timeout(&self, tmd: Duration) -> Self {
         Self {
             token: self.create_child_token(),
-            time_start: Instant::now(),
+            time_start: Instant::now(), // 子上下文重新计时
             timeout_dur: Some(tmd),
         }
     }
