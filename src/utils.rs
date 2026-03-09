@@ -217,7 +217,7 @@ use crate::bytes;
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
-    ctx: &Context,
+    ctx: &asyncs::Context,
     stream: &mut T,
     ln: usize,
 ) -> io::Result<bytes::ByteBoxBuf> {
@@ -226,11 +226,8 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
         return Ok(buf);
     }
     while buf.len() < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
         let mut data = vec![0u8; 1024];
-        let n = fut_tmout_ctxend0(ctx, stream.read(&mut data[..])).await?;
+        let n = ctx.wait_futs( stream.read(&mut data[..])).await?;
         if n <= 0 {
             break;
         }
@@ -242,7 +239,7 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
-    ctx: &Context,
+    ctx: &asyncs::Context,
     stream: &mut T,
     ln: usize,
 ) -> io::Result<Box<[u8]>> {
@@ -252,10 +249,7 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
     let mut rn = 0usize;
     let mut data = vec![0u8; ln];
     while rn < ln {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        match fut_tmout_ctxend0(ctx, stream.read(&mut data[rn..])).await {
+        match ctx.wait_futs(stream.read(&mut data[rn..])).await {
             Ok(n) => {
                 if n > 0 {
                     rn += n;
@@ -276,7 +270,7 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
-    ctx: &Context,
+    ctx: &asyncs::Context,
     stream: &mut T,
     bts: &[u8],
 ) -> io::Result<usize> {
@@ -286,10 +280,7 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
     }
     let mut wn = 0usize;
     while wn < sz {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
-        let n = fut_tmout_ctxend0(ctx, stream.write(&bts[wn..])).await?;
+        let n = ctx.wait_futs(stream.write(&bts[wn..])).await?;
         if n > 0 {
             wn += n;
         } else {
@@ -303,7 +294,7 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn write_allbuf_async<T: asyncs::AsyncWriteExt + Unpin>(
-    ctx: &Context,
+    ctx: &asyncs::Context,
     stream: &mut T,
     bts: &bytes::ByteBoxBuf,
 ) -> io::Result<usize> {
@@ -314,9 +305,6 @@ pub async fn write_allbuf_async<T: asyncs::AsyncWriteExt + Unpin>(
     let mut wn = 0usize;
     let its = bts.iter();
     for v in its {
-        if ctx.done() {
-            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
-        }
         wn += write_all_async(ctx, stream, &v[..]).await?
     }
     Ok(wn)
