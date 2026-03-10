@@ -96,19 +96,43 @@ impl Context {
     where
         F: Future<Output = std::io::Result<T>>,
     {
+        match self.wait_fut(fut).await {
+            CtxWaitRes::Ok(v) => v,
+            CtxWaitRes::Cancel => Err(crate::ioerr(
+                "ctx cancel",
+                Some(std::io::ErrorKind::Interrupted),
+            )),
+            CtxWaitRes::Timeout => Err(crate::ioerr(
+                "ctx timeout",
+                Some(std::io::ErrorKind::TimedOut),
+            )),
+        }
+    }
+    pub async fn wait_fut<F, T>(&self, fut: F) -> CtxWaitRes<T>
+    where
+        F: Future<Output = T>,
+    {
         // 宏会自动 pin fut
         tokio::select! {
             _ = self.cancelled_future() => {
-                Err(crate::ioerr("ctx cancel", Some(std::io::ErrorKind::Interrupted)))
+                // Err(crate::ioerr("ctx cancel", Some(std::io::ErrorKind::Interrupted)))
+                CtxWaitRes::Cancel
             },
             _ = self.timeout_future() => {
-                Err(crate::ioerr("ctx timeout", Some(std::io::ErrorKind::TimedOut)))
+                // Err(crate::ioerr("ctx timeout", Some(std::io::ErrorKind::TimedOut)))
+                CtxWaitRes::Timeout
             },
             v = fut => {
-                v
+                CtxWaitRes::Ok(v)
             },
         }
     }
+}
+
+pub enum CtxWaitRes<T> {
+    Ok(T),
+    Cancel,
+    Timeout,
 }
 
 // 优化后的 Either 枚举，支持三种状态：Left, Right, Pending
