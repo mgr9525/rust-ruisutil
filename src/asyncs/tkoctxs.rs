@@ -64,6 +64,13 @@ impl Context {
     pub fn cancel(&self) {
         self.token.cancel();
     }
+    pub fn done_err(&self) -> std::io::Result<()> {
+        if self.cancelled() {
+            Err(crate::ioerr("ctx end", Some(std::io::ErrorKind::Interrupted)))
+        } else {
+            Ok(())
+        }
+    }
 
     /// 获取取消信号的 Future
     pub fn cancelled_future(&self) -> impl Future<Output = ()> + '_ {

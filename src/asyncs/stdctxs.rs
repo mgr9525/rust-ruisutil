@@ -90,6 +90,13 @@ impl Context {
     pub fn cancel(&self) {
         self.src.cancel();
     }
+    pub fn done_err(&self) -> std::io::Result<()> {
+        if self.cancelled() {
+            Err(crate::ioerr("ctx end", Some(std::io::ErrorKind::Interrupted)))
+        } else {
+            Ok(())
+        }
+    }
 
     pub fn cancelled_future(&self) -> impl Future<Output = ()> + '_ {
         self.token.cancelled()

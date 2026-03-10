@@ -169,7 +169,7 @@ impl ByteSteamBuf {
     }
     pub async fn pull_size(
         &self,
-        ctx: Option<&crate::Context>,
+        ctx: Option<&crate::asyncs::Context>,
         sz: usize,
     ) -> io::Result<ByteBoxBuf> {
         self.more_max(sz).await;
