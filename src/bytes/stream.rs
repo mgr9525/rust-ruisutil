@@ -25,8 +25,9 @@ pub struct ByteSteamBuf {
 
 impl ByteSteamBuf {
     pub fn new(ctx: &crate::asyncs::Context, max: usize, tmout: Duration) -> Self {
+        let ctx = ctx.child();
         Self {
-            ctx: ctx.child(),
+            ctx: ctx.clone(),
             buf: RwLock::new(ByteBoxBuf::new()),
             max: AtomicUsize::new(max),
             tmout: tmout,
@@ -41,12 +42,13 @@ impl ByteSteamBuf {
         &self.ctx
     }
     pub fn done_err(&self) -> std::io::Result<()> {
-        match self.ctx.cancelled() {
-            true => Ok(()),
-            false => Err(crate::ioerr(
+        if self.ctx.cancelled() {
+            Err(crate::ioerr(
                 "close chan!!!",
                 Some(io::ErrorKind::BrokenPipe),
-            )),
+            ))
+        } else {
+            Ok(())
         }
     }
     pub fn close(&self) {
@@ -59,17 +61,17 @@ impl ByteSteamBuf {
             Some(v) => self.ctx.child_timeout(v),
             None => self.ctx.clone(),
         };
-        let _ = ctxs.wait_futs(async {
-            loop {
-                if self.buf.read().await.len() <= 0 {
-                    break;
-                }
-                let _ =
-                    asyncs::timeout(Duration::from_millis(200), self.wkr_can_write.clone()).await;
+        while !ctxs.cancelled() {
+            let lkv = self.buf.read().await;
+            if lkv.len() <= 0 {
+                break;
             }
-            Ok(())
-        })
-        .await;
+            std::mem::drop(lkv);
+            let _ = ctxs
+                .child_timeout(Duration::from_millis(200))
+                .wait_futs(self.wkr_can_write.clone())
+                .await;
+        }
     }
     pub async fn clear(&self) {
         let mut lkv = self.buf.write().await;
@@ -109,7 +111,11 @@ impl ByteSteamBuf {
                 if self.buf.read().await.len() <= self.get_max() {
                     break;
                 }
-                let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_write.clone()).await;
+                let _ = self
+                    .ctx
+                    .child_timeout(self.tmout.clone())
+                    .wait_futs(self.wkr_can_write.clone())
+                    .await;
             }
         }
         self.done_err()?;
@@ -121,36 +127,32 @@ impl ByteSteamBuf {
         Ok(ln)
     }
     pub async fn pull(&self) -> Option<bytes::Bytes> {
-        let _ = self
-            .ctx
-            .wait_futs(async {
-                loop {
-                    if self.buf.read().await.len() > 0 {
-                        break;
-                    }
-                    let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
-                }
-                Ok(())
-            })
-            .await;
+        while !self.ctx.cancelled() {
+            if self.buf.read().await.len() > 0 {
+                break;
+            }
+            let _ = self
+                .ctx
+                .child_timeout(self.tmout.clone())
+                .wait_futs(self.wkr_can_read.clone())
+                .await;
+        }
         let mut lkv = self.buf.write().await;
         let rts = lkv.pull();
         self.notify_all_can_write();
         rts
     }
     pub async fn pull_max(&self, max: usize) -> Option<bytes::Bytes> {
-        let _ = self
-            .ctx
-            .wait_futs(async {
-                loop {
-                    if self.buf.read().await.len() > 0 {
-                        break;
-                    }
-                    let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
-                }
-                Ok(())
-            })
-            .await;
+        while !self.ctx.cancelled() {
+            if self.buf.read().await.len() > 0 {
+                break;
+            }
+            let _ = self
+                .ctx
+                .child_timeout(self.tmout.clone())
+                .wait_futs(self.wkr_can_read.clone())
+                .await;
+        }
         let mut lkv = self.buf.write().await;
         let rts = match lkv.pull() {
             None => None,
@@ -167,26 +169,25 @@ impl ByteSteamBuf {
     }
     pub async fn pull_size(
         &self,
-        ctx: Option<&crate::asyncs::Context>,
+        ctx: Option<&crate::Context>,
         sz: usize,
     ) -> io::Result<ByteBoxBuf> {
         self.more_max(sz).await;
-        let _ = self
-            .ctx
-            .wait_futs(async {
-                loop {
-                    if self.buf.read().await.len() > sz {
-                        break;
-                    }
-                    let _ = asyncs::timeouts(self.tmout.clone(), self.wkr_can_read.clone()).await;
-                }
-                Ok(())
-            })
-            .await;
-        let mut lkv = self.buf.write().await;
-        if lkv.len() < sz {
-            return Err(io::Error::new(io::ErrorKind::BrokenPipe, "buff is closed?"));
+        while !self.ctx.cancelled() {
+            if let Some(v) = ctx {
+                v.done_err()?;
+            }
+            if self.buf.read().await.len() >= sz {
+                break;
+            }
+            // self.wkr2.wait_timeout(self.tmout.clone());
+            let _ = self
+                .ctx
+                .child_timeout(self.tmout.clone())
+                .wait_futs(self.wkr_can_read.clone())
+                .await;
         }
+        let mut lkv = self.buf.write().await;
         let rts = lkv.cut_front(sz);
         self.notify_all_can_write();
         rts
@@ -301,7 +302,7 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<io::Result<()>> {
-        if self.ctx.cancelled() {
+        if self.ctx.done() {
             return std::task::Poll::Ready(Err(crate::ioerr(
                 "buff is closed?",
                 Some(std::io::ErrorKind::BrokenPipe),
