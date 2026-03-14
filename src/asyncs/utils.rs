@@ -45,9 +45,7 @@ pub fn async_fn<'a, T>(
 pub struct AsyncFnFuture<'a, T> {
     fut: Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>>,
     futs: Option<
-        Arc<
-            std::sync::Mutex<Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>>>,
-        >,
+        Arc<std::sync::Mutex<Option<std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>>>>,
     >,
 }
 impl<'a, T> AsyncFnFuture<'a, T> {
@@ -77,7 +75,7 @@ impl<'a, T> AsyncFnFuture<'a, T> {
                 // self.wkr = Some(cx.waker().clone());
                 return std::task::Poll::Ready(Err(crate::ioerr("no future", None)));
             }
-            let rst = std::pin::pin!(lkv.as_mut().unwrap()).poll(cx);
+            let rst = lkv.as_mut().unwrap().as_mut().poll(cx);
             match rst {
                 std::task::Poll::Ready(v) => {
                     *lkv = None;
@@ -92,7 +90,7 @@ impl<'a, T> AsyncFnFuture<'a, T> {
                 // self.fut = Some(Box::pin(fc()));
                 return std::task::Poll::Ready(Err(crate::ioerr("no future", None)));
             }
-            let rst = std::pin::pin!(self.fut.as_mut().unwrap()).poll(cx);
+            let rst = self.fut.as_mut().unwrap().as_mut().poll(cx);
             match rst {
                 std::task::Poll::Ready(v) => {
                     self.fut = None;
