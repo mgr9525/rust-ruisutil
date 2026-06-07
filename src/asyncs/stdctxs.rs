@@ -92,7 +92,10 @@ impl Context {
     }
     pub fn done_err(&self) -> std::io::Result<()> {
         if self.cancelled() {
-            Err(crate::ioerr("ctx end", Some(std::io::ErrorKind::Interrupted)))
+            Err(crate::ioerr(
+                "ctx end",
+                Some(std::io::ErrorKind::Interrupted),
+            ))
         } else {
             Ok(())
         }

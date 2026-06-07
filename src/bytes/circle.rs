@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature="asyncs")]
+#[cfg(feature = "asyncs")]
 use async_std::task;
 
 pub struct CircleBuf {
@@ -87,7 +87,7 @@ impl CircleBuf {
         self.start = pos;
         Ok(rt)
     }
-    #[cfg(feature="asyncs")]
+    #[cfg(feature = "asyncs")]
     pub async fn ayc_sleep(&self) -> io::Result<()> {
         if self.closed() {
             Err(crate::ioerr("ctx is end", None))
@@ -96,7 +96,7 @@ impl CircleBuf {
             Ok(())
         }
     }
-    #[cfg(feature="asyncs")]
+    #[cfg(feature = "asyncs")]
     pub async fn ayc_put_byte(&mut self, b: u8) -> io::Result<()> {
         if self.closed() {
             return Err(crate::ioerr("ctx is end", None));
@@ -113,7 +113,7 @@ impl CircleBuf {
             self.ayc_sleep().await?;
         }
     }
-    #[cfg(feature="asyncs")]
+    #[cfg(feature = "asyncs")]
     pub async fn ayc_pop_byte(&mut self) -> io::Result<u8> {
         if self.closed() {
             return Err(crate::ioerr("ctx is end", None));
@@ -236,7 +236,7 @@ impl CircleBuf {
     }
 }
 
-#[cfg(feature="asyncs")]
+#[cfg(feature = "asyncs")]
 impl async_std::io::Read for CircleBuf {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
@@ -258,7 +258,7 @@ impl async_std::io::Read for CircleBuf {
         task::Poll::Ready(Ok(ln))
     }
 }
-#[cfg(feature="asyncs")]
+#[cfg(feature = "asyncs")]
 impl async_std::io::Write for CircleBuf {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
@@ -330,7 +330,7 @@ impl Write for CircleBuf {
         let bufs = self.borrow_write_buf(buf.len())?;
         let ln = bufs.len();
         bufs.copy_from_slice(&buf[..bufs.len()]);
-        let _=bufs;
+        let _ = bufs;
         self.borrow_write_ok(ln)?;
         Ok(ln)
     }
