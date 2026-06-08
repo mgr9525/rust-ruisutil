@@ -290,14 +290,6 @@ impl Context {
             },
         }
     }
-
-    // 大future使用这个,避免爆栈
-    pub async fn wait_box_fut<F, T>(&self, fut: F) -> CtxWaitRes<T>
-    where
-        F: Future<Output = T>,
-    {
-        self.wait_fut(Box::pin(fut)).await
-    }
 }
 
 pub enum CtxWaitRes<T> {
