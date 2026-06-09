@@ -229,11 +229,11 @@ impl Context {
         T: 'a,
         F: Future<Output = T> + 'a,
     {
-        #[cfg(debug_assertions)]
-        log::debug!("ctx.wait_fut1 fut.szof={}", std::mem::size_of_val(&fut));
+        // #[cfg(debug_assertions)]
+        // log::debug!("ctx.wait_fut1 fut.szof={}", std::mem::size_of_val(&fut));
         let fut = Box::pin(fut);
-        #[cfg(debug_assertions)]
-        log::debug!("ctx.wait_fut2 fut.szof={}", std::mem::size_of_val(&fut));
+        // #[cfg(debug_assertions)]
+        // log::debug!("ctx.wait_fut2 fut.szof={}", std::mem::size_of_val(&fut));
         self.wait_fut_box_tmout(tmout, fut)
     }
 
