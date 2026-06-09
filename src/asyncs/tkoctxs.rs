@@ -258,8 +258,8 @@ impl Context {
         F: Future<Output = T>,
     {
         let fut = tokio::time::timeout(tmout, fut);
-        #[cfg(debug_assertions)]
-        log::debug!("ctx.wait_fut_box fut.szof={}", std::mem::size_of_val(&fut));
+        // #[cfg(debug_assertions)]
+        // log::debug!("ctx.wait_fut_box fut.szof={}", std::mem::size_of_val(&fut));
         // 宏会自动 pin fut
         tokio::select! {
             _ = self.cancelled_future() => {
