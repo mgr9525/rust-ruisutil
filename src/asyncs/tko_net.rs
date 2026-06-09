@@ -8,7 +8,7 @@ pub struct H2StreamsNums {
     pub num_recv_streams: AtomicUsize,
 }
 
-pub struct BoxTcpStream<IO> {
+pub struct BoxStream<IO> {
     inner: Box<BoxTcpStreamInr<IO>>,
 }
 struct BoxTcpStreamInr<IO> {
@@ -21,7 +21,7 @@ impl<IO> Drop for BoxTcpStreamInr<IO> {
         self.ctx.cancel();
     }
 }
-impl<IO> BoxTcpStream<IO> {
+impl<IO> BoxStream<IO> {
     pub fn new(ctx: &crate::asyncs::Context, stream: IO) -> Self {
         Self::newctx(Some(ctx), stream)
     }
@@ -63,7 +63,7 @@ impl<IO> BoxTcpStream<IO> {
     }
 }
 
-impl<IO> tokio::io::AsyncRead for BoxTcpStream<IO>
+impl<IO> tokio::io::AsyncRead for BoxStream<IO>
 where
     IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
@@ -91,7 +91,7 @@ where
         rst
     }
 }
-impl<IO> tokio::io::AsyncWrite for BoxTcpStream<IO>
+impl<IO> tokio::io::AsyncWrite for BoxStream<IO>
 where
     IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
