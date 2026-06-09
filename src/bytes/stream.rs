@@ -57,20 +57,16 @@ impl ByteSteamBuf {
         self.wkr_can_write.close();
     }
     pub async fn waits(&self, tmout: Option<Duration>) {
-        let ctxs = match tmout {
-            Some(v) => self.ctx.child_timeout(v),
-            None => self.ctx.clone(),
-        };
-        while !ctxs.cancelled() {
+        while !self.ctx.cancelled() {
             let lkv = self.buf.read().await;
             if lkv.len() <= 0 {
                 break;
             }
             std::mem::drop(lkv);
-            let _ = ctxs
-                .child_timeout(Duration::from_millis(200))
-                .wait_futs(self.wkr_can_write.clone())
-                .await;
+            let _ = match tmout {
+                None => self.ctx.wait_fut(self.wkr_can_write.clone()).await,
+                Some(v) => self.ctx.wait_fut_tmout(v, self.wkr_can_write.clone()).await,
+            };
         }
     }
     pub async fn clear(&self) {
@@ -113,8 +109,7 @@ impl ByteSteamBuf {
                 }
                 let _ = self
                     .ctx
-                    .child_timeout(self.tmout.clone())
-                    .wait_futs(self.wkr_can_write.clone())
+                    .wait_fut_tmout(self.tmout.clone(), self.wkr_can_write.clone())
                     .await;
             }
         }
@@ -133,8 +128,7 @@ impl ByteSteamBuf {
             }
             let _ = self
                 .ctx
-                .child_timeout(self.tmout.clone())
-                .wait_futs(self.wkr_can_read.clone())
+                .wait_fut_tmout(self.tmout.clone(), self.wkr_can_read.clone())
                 .await;
         }
         let mut lkv = self.buf.write().await;
@@ -149,8 +143,7 @@ impl ByteSteamBuf {
             }
             let _ = self
                 .ctx
-                .child_timeout(self.tmout.clone())
-                .wait_futs(self.wkr_can_read.clone())
+                .wait_fut_tmout(self.tmout.clone(), self.wkr_can_read.clone())
                 .await;
         }
         let mut lkv = self.buf.write().await;
@@ -183,8 +176,7 @@ impl ByteSteamBuf {
             // self.wkr2.wait_timeout(self.tmout.clone());
             let _ = self
                 .ctx
-                .child_timeout(self.tmout.clone())
-                .wait_futs(self.wkr_can_read.clone())
+                .wait_fut_tmout(self.tmout.clone(), self.wkr_can_read.clone())
                 .await;
         }
         let mut lkv = self.buf.write().await;

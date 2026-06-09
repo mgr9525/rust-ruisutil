@@ -225,7 +225,7 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
     if ln <= 0 {
         return Ok(buf);
     }
-    ctx.wait_futs(async {
+    ctx.wait_fut(async {
         while buf.len() < ln {
             let mut data = vec![0u8; 1024];
             let n = stream.read(&mut data[..]).await?;
@@ -238,6 +238,7 @@ pub async fn read_allbuf_async<T: asyncs::AsyncReadExt + Unpin>(
         Ok(buf)
     })
     .await
+    .io_rst()
 }
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
@@ -249,7 +250,7 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
     if ln <= 0 {
         return Ok(Vec::new().into_boxed_slice());
     }
-    ctx.wait_futs(async {
+    ctx.wait_fut(async {
         let mut rn = 0usize;
         let mut data = vec![0u8; ln];
         while rn < ln {
@@ -272,6 +273,7 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
         Ok(data.into_boxed_slice())
     })
     .await
+    .io_rst()
 }
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
@@ -284,7 +286,7 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
     if sz <= 0 {
         return Ok(0);
     }
-    ctx.wait_futs(async {
+    ctx.wait_fut(async {
         let mut wn = 0usize;
         while wn < sz {
             let n = stream.write(&bts[wn..]).await?;
@@ -300,6 +302,7 @@ pub async fn write_all_async<T: asyncs::AsyncWriteExt + Unpin>(
         Ok(wn)
     })
     .await
+    .io_rst()
 }
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub async fn write_allbuf_async<T: asyncs::AsyncWriteExt + Unpin>(
@@ -634,7 +637,7 @@ pub fn strptime_off(t: &str, s: &str, hour: i32) -> io::Result<SystemTime> {
                             return Err(crate::ioerr("local tm nil", None))
                         }
                         chrono::LocalResult::Single(v) => v,
-                        chrono::LocalResult::Ambiguous(v, e) => {
+                        chrono::LocalResult::Ambiguous(_v, _e) => {
                             return Err(crate::ioerr("local tm err", None))
                         }
                     };

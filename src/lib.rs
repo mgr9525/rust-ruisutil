@@ -169,17 +169,21 @@ impl WaitGroup {
     }
     #[cfg(any(feature = "asyncs", feature = "tokios"))]
     pub async fn wait(&self, ctxs: Option<&Context>) {
-        let _ = self.inner.ctx.wait_futs(async {
-            loop {
-                if let Some(v) = ctxs {
-                    if v.done() {
-                        break;
+        let _ = self
+            .inner
+            .ctx
+            .wait_fut(async {
+                loop {
+                    if let Some(v) = ctxs {
+                        if v.done() {
+                            break;
+                        }
                     }
+                    let _ =
+                        asyncs::timeout(Duration::from_millis(100), self.inner.wkr.clone()).await;
                 }
-                let _ = asyncs::timeout(Duration::from_millis(100), self.inner.wkr.clone()).await;
-            }
-            Ok(())
-        });
+            })
+            .await;
     }
     pub fn done(&self) -> bool {
         // let count = self.inner.count.load(Ordering::SeqCst);
@@ -678,24 +682,25 @@ mod tests {
             let ctx: crate::asyncs::Context = prt.into();
             let ctxc = ctx.clone();
             match ctx
-                .wait_futs(async move {
+                .wait_fut(async move {
                     crate::asyncs::sleep(Duration::from_secs(5)).await;
                     ctxc.cancel(); // 注释掉第二个任务可以变成超时
                     return Err(crate::ioerr("test io err", None));
                     Ok(())
                 })
                 .await
+                .io_rst()
             {
                 Ok(v) => println!("ok:{:?}", v),
                 Err(e) => println!("ruisutil err:{:?}", e),
             }
             match ctx
-                .child_timeout(Duration::from_secs(2))
-                .wait_futs(async move {
+                .wait_fut_tmout(Duration::from_secs(2), async move {
                     crate::asyncs::sleep(Duration::from_secs(7)).await;
                     Ok(())
                 })
                 .await
+                .io_rst()
             {
                 Ok(v) => println!("ok:{:?}", v),
                 Err(e) => println!("ruisutil err:{:?}", e),
