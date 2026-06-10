@@ -12,6 +12,9 @@ use parking_lot::RwLock;
 #[derive(Clone)]
 pub struct Context {
     token: CancelToken,
+    // 记录 Context 创建的绝对时间点
+    time_start: Instant,
+    timeout_dur: Option<Duration>,
     tmout_cncl: Arc<AtomicBool>,
 }
 
@@ -169,14 +172,35 @@ impl Context {
     pub fn new() -> Self {
         Self {
             token: CancelToken::new(),
+            time_start: Instant::now(),
+            timeout_dur: None,
             tmout_cncl: Arc::new(AtomicBool::new(false)),
+        }
+    }
+    pub fn new_timeout(tmd: Duration) -> Self {
+        Self {
+            token: CancelToken::new(),
+            time_start: Instant::now(),
+            timeout_dur: Some(tmd),
+            tmout_cncl: Arc::new(AtomicBool::new(true)),
         }
     }
 
     pub fn child(&self) -> Self {
         Self {
             token: self.token.child_token(),
+            time_start: Instant::now(), // 子上下文重新计时（通常子任务有自己的超时或继承父的剩余时间，这里按新任务算）
+            timeout_dur: None,
             tmout_cncl: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn child_timeout(&self, tmd: Duration) -> Self {
+        Self {
+            token: self.token.child_token(),
+            time_start: Instant::now(), // 子上下文重新计时
+            timeout_dur: Some(tmd),
+            tmout_cncl: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -208,6 +232,28 @@ impl Context {
         self.token.cancelled()
     }
 
+    /// 【核心修改】
+    /// 计算从 time_start 到现在的剩余时间。
+    /// 如果时间已过，返回一个立即完成的 Future。
+    /// 如果没有超时设置，返回 pending。
+    pub fn timeout_future(&self) -> impl Future<Output = ()> + '_ {
+        if let Some(dur) = self.timeout_dur {
+            let elapsed = self.time_start.elapsed();
+
+            if elapsed >= dur {
+                // 时间已经过了，返回一个立即完成的 Future (Ready)
+                Either::Left(std::future::ready(()))
+            } else {
+                // 时间没过，睡“剩余”的时间
+                let remaining = dur - elapsed;
+                Either::Right(tokio::time::sleep(remaining))
+            }
+        } else {
+            // 没有超时设置，返回永不完成
+            Either::Pending
+        }
+    }
+
     pub fn wait_fut<'a, F, T>(&'a self, fut: F) -> impl Future<Output = CtxWaitRes<T>> + 'a
     where
         T: 'a,
@@ -220,7 +266,8 @@ impl Context {
         // log::debug!("ctx.wait_fut2 fut.szof={}", std::mem::size_of_val(&fut));
         self.wait_fut_box(fut)
     }
-    pub fn wait_fut_tmout<'a, F, T>(
+
+    /*pub fn wait_fut_tmout<'a, F, T>(
         &'a self,
         tmout: Duration,
         fut: F,
@@ -235,7 +282,7 @@ impl Context {
         // #[cfg(debug_assertions)]
         // log::debug!("ctx.wait_fut2 fut.szof={}", std::mem::size_of_val(&fut));
         self.wait_fut_box_tmout(tmout, fut)
-    }
+    } */
 
     pub async fn wait_fut_box<F, T>(&self, fut: Pin<Box<F>>) -> CtxWaitRes<T>
     where
@@ -248,12 +295,18 @@ impl Context {
             _ = self.cancelled_future() => {
                 CtxWaitRes::Cancel
             },
+            _ = self.timeout_future() => {
+                if self.tmout_cncl.load(Ordering::SeqCst) {
+                    self.cancel();
+                }
+                CtxWaitRes::Timeout
+            },
             v = fut => {
                 CtxWaitRes::Ok(v)
             },
         }
     }
-    pub async fn wait_fut_box_tmout<F, T>(&self, tmout: Duration, fut: Pin<Box<F>>) -> CtxWaitRes<T>
+    /* pub async fn wait_fut_box_tmout<F, T>(&self, tmout: Duration, fut: Pin<Box<F>>) -> CtxWaitRes<T>
     where
         F: Future<Output = T>,
     {
@@ -279,7 +332,7 @@ impl Context {
                 }
             },
         }
-    }
+    } */
 }
 
 pub enum CtxWaitRes<T> {

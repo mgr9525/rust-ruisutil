@@ -695,7 +695,8 @@ mod tests {
                 Err(e) => println!("ruisutil err:{:?}", e),
             }
             match ctx
-                .wait_fut_tmout(Duration::from_secs(2), async move {
+                .child_timeout(Duration::from_secs(2))
+                .wait_fut(async move {
                     crate::asyncs::sleep(Duration::from_secs(7)).await;
                     Ok(())
                 })

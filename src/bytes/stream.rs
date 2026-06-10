@@ -65,7 +65,12 @@ impl ByteSteamBuf {
             std::mem::drop(lkv);
             let _ = match tmout {
                 None => self.ctx.wait_fut(self.wkr_can_write.clone()).await,
-                Some(v) => self.ctx.wait_fut_tmout(v, self.wkr_can_write.clone()).await,
+                Some(v) => {
+                    self.ctx
+                        .child_timeout(v)
+                        .wait_fut(self.wkr_can_write.clone())
+                        .await
+                }
             };
         }
     }
@@ -109,7 +114,8 @@ impl ByteSteamBuf {
                 }
                 let _ = self
                     .ctx
-                    .wait_fut_tmout(self.tmout.clone(), self.wkr_can_write.clone())
+                    .child_timeout(self.tmout.clone())
+                    .wait_fut(self.wkr_can_write.clone())
                     .await;
             }
         }
@@ -128,7 +134,8 @@ impl ByteSteamBuf {
             }
             let _ = self
                 .ctx
-                .wait_fut_tmout(self.tmout.clone(), self.wkr_can_read.clone())
+                .child_timeout(self.tmout.clone())
+                .wait_fut(self.wkr_can_read.clone())
                 .await;
         }
         let mut lkv = self.buf.write().await;
@@ -143,7 +150,8 @@ impl ByteSteamBuf {
             }
             let _ = self
                 .ctx
-                .wait_fut_tmout(self.tmout.clone(), self.wkr_can_read.clone())
+                .child_timeout(self.tmout.clone())
+                .wait_fut(self.wkr_can_read.clone())
                 .await;
         }
         let mut lkv = self.buf.write().await;
@@ -176,7 +184,8 @@ impl ByteSteamBuf {
             // self.wkr2.wait_timeout(self.tmout.clone());
             let _ = self
                 .ctx
-                .wait_fut_tmout(self.tmout.clone(), self.wkr_can_read.clone())
+                .child_timeout(self.tmout.clone())
+                .wait_fut(self.wkr_can_read.clone())
                 .await;
         }
         let mut lkv = self.buf.write().await;
