@@ -180,7 +180,7 @@ impl Context {
         }
     }
 
-    pub fn tmout_cancel(&self, v: bool) -> &Self {
+    pub fn tmout_cancel(self, v: bool) -> Self {
         self.tmout_cncl.store(v, Ordering::SeqCst);
         self
     }
