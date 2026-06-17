@@ -86,8 +86,6 @@ pub(crate) fn is_cancelled(node: &Arc<TreeNode>) -> bool {
 
 /// Creates a child node
 pub(crate) fn child_node(parent: &Arc<TreeNode>) -> Arc<TreeNode> {
-    let mut locked_parent = parent.inner.lock();
-
     // Do not register as child if we are already cancelled.
     // Cancelled trees can never be uncancelled and therefore
     // need no connection to parents or children any more.
@@ -105,6 +103,7 @@ pub(crate) fn child_node(parent: &Arc<TreeNode>) -> Arc<TreeNode> {
         });
     }
 
+    let mut locked_parent = parent.inner.lock();
     let child = Arc::new(TreeNode {
         is_cancelled: AtomicBool::new(false),
         inner: parking_lot::Mutex::new(Inner {
