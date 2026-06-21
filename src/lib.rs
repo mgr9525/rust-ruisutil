@@ -218,7 +218,12 @@ impl Clone for WaitGroup {
 mod tests {
     use std::time::{Duration, SystemTime};
 
-    use crate::{asyncs, bytes::CircleBuf, conf::KVConfig, ArcMut, Context};
+    use crate::{
+        asyncs::{self, CtxWaitRes},
+        bytes::CircleBuf,
+        conf::KVConfig,
+        ArcMut, Context,
+    };
 
     #[test]
     fn it_works() {
@@ -706,6 +711,37 @@ mod tests {
                 Ok(v) => println!("ok:{:?}", v),
                 Err(e) => println!("ruisutil err:{:?}", e),
             }
+            Ok(())
+        });
+    }
+    #[test]
+    fn tkoctx1() {
+        let _ = crate::asyncs::block_on(async move {
+            // let ctx = crate::asyncs::Context::new();
+            let prt: Option<crate::asyncs::Context> = None;
+            let ctx: crate::asyncs::Context = prt.into();
+            let ctxc = ctx.clone();
+            let ctxcd = ctx.child();
+            crate::asyncs::task::spawn(async move {
+                match ctxc.future().await {
+                    CtxWaitRes::Ok(_) => println!("ctxc Ok 111"),
+                    CtxWaitRes::Cancel => println!("ctxc Cancel 222"),
+                    CtxWaitRes::Timeout => println!("ctxc Timeout 333"),
+                }
+            });
+            crate::asyncs::task::spawn(async move {
+                match ctxcd.future().await {
+                    CtxWaitRes::Ok(_) => println!("ctxcd Ok 111"),
+                    CtxWaitRes::Cancel => println!("ctxcd Cancel 222"),
+                    CtxWaitRes::Timeout => println!("ctxcd Timeout 333"),
+                }
+            });
+
+            crate::asyncs::sleep(Duration::from_secs(2)).await;
+            println!("ctx cancel");
+            ctx.cancel();
+            crate::asyncs::sleep(Duration::from_secs(5)).await;
+
             Ok(())
         });
     }
