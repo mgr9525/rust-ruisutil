@@ -92,17 +92,17 @@ impl Context {
     /// 计算从 time_start 到现在的剩余时间。
     /// 如果时间已过，返回一个立即完成的 Future。
     /// 如果没有超时设置，返回 pending。
-    pub fn timeout_future(&self) -> impl Future<Output = ()> + '_ {
+    pub fn timeout_future(&self) -> Either {
         if let Some(dur) = self.timeout_dur {
             let elapsed = self.time_start.elapsed();
 
             if elapsed >= dur {
                 // 时间已经过了，返回一个立即完成的 Future (Ready)
-                Either::Left(std::future::ready(()))
+                Either::Expired
             } else {
                 // 时间没过，睡“剩余”的时间
                 let remaining = dur - elapsed;
-                Either::Right(tokio::time::sleep(remaining))
+                Either::Sleep(Box::pin(tokio::time::sleep(remaining)))
             }
         } else {
             // 没有超时设置，返回永不完成
@@ -241,26 +241,21 @@ impl<T> CtxWaitRes<T> {
 }
 
 // 优化后的 Either 枚举，支持三种状态：Left, Right, Pending
-enum Either<L, R> {
-    Left(L),
-    Right(R),
+enum Either {
+    Expired,
+    Sleep(Pin<Box<tokio::time::Sleep>>),
     Pending, // 专门用于表示无超时时的 pending 状态
 }
 
-impl<L, R, T> Future for Either<L, R>
-where
-    L: Future<Output = T>,
-    R: Future<Output = T>,
-{
-    type Output = T;
+impl Future for Either {
+    type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<T> {
-        unsafe {
-            match self.get_unchecked_mut() {
-                Either::Left(l) => Pin::new_unchecked(l).poll(cx),
-                Either::Right(r) => Pin::new_unchecked(r).poll(cx),
-                Either::Pending => Poll::Pending,
-            }
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<()> {
+        let this = self.get_mut();
+        match this {
+            Either::Expired => Poll::Ready(()),
+            Either::Sleep(slp) => slp.as_mut().poll(cx),
+            Either::Pending => Poll::Pending,
         }
     }
 }
@@ -285,40 +280,29 @@ impl From<&Option<Context>> for Context {
 pub struct ContextFuture {
     ctx: Context,
     cancel_fut: Pin<Box<tkocncel::WaitForCancellationFutureOwned>>,
-    timeout_fut: Option<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
+    timeout_fut: Pin<Box<Either>>,
 }
 impl ContextFuture {
     fn new(ctx: &Context) -> Self {
-        let timeout_fut = ctx.timeout_dur.map(|dur| {
-            let elapsed = ctx.time_start.elapsed();
-            if elapsed >= dur {
-                Box::pin(std::future::ready(()))
-                    as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
-            } else {
-                Box::pin(tokio::time::sleep(dur - elapsed))
-                    as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
-            }
-        });
         Self {
             ctx: ctx.clone(),
             cancel_fut: Box::pin(ctx.cancelled_ownedfut()),
-            timeout_fut,
+            timeout_fut: Box::pin(ctx.timeout_future()),
         }
     }
 }
 impl Future for ContextFuture {
     type Output = CtxWaitRes<()>;
-    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
-        if self.cancel_fut.as_mut().poll(cx).is_ready() {
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        if this.cancel_fut.as_mut().poll(cx).is_ready() {
             return Poll::Ready(CtxWaitRes::Cancel);
         }
-        if let Some(timeout_fut) = self.timeout_fut.as_mut() {
-            if timeout_fut.as_mut().poll(cx).is_ready() {
-                if self.ctx.tmout_cncl.load(Ordering::SeqCst) {
-                    self.ctx.cancel();
-                }
-                return Poll::Ready(CtxWaitRes::Timeout);
+        if this.timeout_fut.as_mut().poll(cx).is_ready() {
+            if this.ctx.tmout_cncl.load(Ordering::SeqCst) {
+                this.ctx.cancel();
             }
+            return Poll::Ready(CtxWaitRes::Timeout);
         }
         Poll::Pending
     }
