@@ -1,4 +1,6 @@
-use std::{sync::atomic::AtomicUsize, time::Duration};
+use std::{future::Future, pin::Pin, sync::atomic::AtomicUsize, time::Duration};
+
+use crate::asyncs::tkocncel;
 
 #[derive(Default)]
 pub struct H2StreamsNums {
@@ -11,16 +13,23 @@ pub struct H2StreamsNums {
 pub struct BoxStream<IO> {
     inner: Box<BoxTcpStreamInr<IO>>,
 }
+
 struct BoxTcpStreamInr<IO> {
     ctx: crate::asyncs::Context,
+    ctxfut: Pin<Box<crate::asyncs::ContextFuture>>,
     tmr: crate::Timer,
+    tmslpr: Pin<Box<tokio::time::Sleep>>,
+    tmslpw: Pin<Box<tokio::time::Sleep>>,
     stream: IO,
+    // ln_rd: AtomicUsize,
+    // ln_wd: AtomicUsize,
 }
 impl<IO> Drop for BoxTcpStreamInr<IO> {
     fn drop(&mut self) {
         self.ctx.cancel();
     }
 }
+const SLEEP_DURATION: Duration = Duration::from_secs(30);
 impl<IO> BoxStream<IO> {
     pub fn new(ctx: &crate::asyncs::Context, stream: IO) -> Self {
         Self::newctx(Some(ctx), stream)
@@ -36,30 +45,29 @@ impl<IO> BoxStream<IO> {
         stream: IO,
         outdur: Duration,
     ) -> Self {
+        let ctx = ctx
+            .map(|v| v.child())
+            .unwrap_or(crate::asyncs::Context::new());
+        let ctxfut = Box::pin(ctx.future());
+        let tmr = crate::Timer::new(outdur);
+        tmr.reset();
         Self {
             inner: Box::new(BoxTcpStreamInr {
-                ctx: ctx
-                    .map(|v| v.child())
-                    .unwrap_or(crate::asyncs::Context::new()),
-                tmr: crate::Timer::new(outdur),
+                ctx: ctx,
+                ctxfut: ctxfut,
+                tmr: tmr,
+                tmslpr: Box::pin(tokio::time::sleep(SLEEP_DURATION)),
+                tmslpw: Box::pin(tokio::time::sleep(SLEEP_DURATION)),
                 stream: stream,
+                // ln_rd: AtomicUsize::new(0),
+                // ln_wd: AtomicUsize::new(0),
             }),
         }
     }
 
-    pub fn start(&self) {
-        let ctx = self.inner.ctx.clone();
-        let tmr = self.inner.tmr.clone();
-        tmr.reset();
-        crate::asyncs::task::spawn(async move {
-            while !ctx.cancelled() {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                if tmr.tmout() {
-                    ctx.cancel();
-                    break;
-                }
-            }
-        });
+    fn reset_tmslp(tmslp: Pin<&mut tokio::time::Sleep>) {
+        let inst = tokio::time::Instant::now() + SLEEP_DURATION;
+        tmslp.reset(inst);
     }
 }
 
@@ -68,23 +76,42 @@ where
     IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
+        if self.inner.tmr.tmout() {
+            self.inner.ctx.cancel();
+        }
         if self.inner.ctx.cancelled() {
             return std::task::Poll::Ready(Err(crate::ioerr(
                 "ctx end",
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         }
-        let rst = std::pin::Pin::new(&mut self.inner.stream).poll_read(cx, buf);
-
+        let this = self.get_mut();
+        let rst = std::pin::Pin::new(&mut this.inner.stream).poll_read(cx, buf);
         match &rst {
             std::task::Poll::Ready(Ok(_v)) => {
                 if buf.filled().len() > 0 {
-                    self.inner.tmr.reset();
+                    this.inner.tmr.reset();
+                    // this.inner
+                    //     .ln_rd
+                    //     .fetch_add(buf.filled().len(), std::sync::atomic::Ordering::Relaxed);
+                    Self::reset_tmslp(this.inner.tmslpr.as_mut());
                 }
+            }
+            std::task::Poll::Pending => {
+                if let std::task::Poll::Ready(v) = this.inner.ctxfut.as_mut().poll(cx) {
+                    if !v.is_ok() {
+                        return std::task::Poll::Ready(Err(crate::ioerr(
+                            "ctx end, poll ctxfut err",
+                            Some(std::io::ErrorKind::BrokenPipe),
+                        )));
+                    }
+                }
+                let _v = std::task::ready!(this.inner.tmslpr.as_mut().poll(cx));
+                Self::reset_tmslp(this.inner.tmslpr.as_mut());
             }
             _ => {}
         }
@@ -96,23 +123,44 @@ where
     IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     fn poll_write(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
+        if self.inner.tmr.tmout() {
+            self.inner.ctx.cancel();
+        }
         if self.inner.ctx.cancelled() {
             return std::task::Poll::Ready(Err(crate::ioerr(
                 "ctx end",
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         }
-        let rst = std::pin::Pin::new(&mut self.inner.stream).poll_write(cx, buf);
+        let this = self.get_mut();
+        let rst = std::pin::Pin::new(&mut this.inner.stream).poll_write(cx, buf);
 
         match &rst {
             std::task::Poll::Ready(Ok(n)) => {
-                if *n > 0 {
-                    self.inner.tmr.reset();
+                let ln = *n;
+                if ln > 0 {
+                    this.inner.tmr.reset();
+                    // this.inner
+                    //     .ln_wd
+                    //     .fetch_add(ln, std::sync::atomic::Ordering::Relaxed);
+                    Self::reset_tmslp(this.inner.tmslpw.as_mut());
                 }
+            }
+            std::task::Poll::Pending => {
+                if let std::task::Poll::Ready(v) = this.inner.ctxfut.as_mut().poll(cx) {
+                    if !v.is_ok() {
+                        return std::task::Poll::Ready(Err(crate::ioerr(
+                            "ctx end, poll ctxfut err",
+                            Some(std::io::ErrorKind::BrokenPipe),
+                        )));
+                    }
+                }
+                let _v = std::task::ready!(this.inner.tmslpw.as_mut().poll(cx));
+                Self::reset_tmslp(this.inner.tmslpw.as_mut());
             }
             _ => {}
         }
@@ -120,7 +168,7 @@ where
     }
 
     fn poll_flush(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         /* if self.ctx.cancelled() {
@@ -129,13 +177,15 @@ where
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         } */
-        std::pin::Pin::new(&mut self.inner.stream).poll_flush(cx)
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner.stream).poll_flush(cx)
     }
 
     fn poll_shutdown(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        std::pin::Pin::new(&mut self.inner.stream).poll_shutdown(cx)
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner.stream).poll_shutdown(cx)
     }
 }
