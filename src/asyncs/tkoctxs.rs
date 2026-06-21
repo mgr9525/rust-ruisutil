@@ -7,12 +7,11 @@ use std::sync::{
 use std::task::{Context as TaskContext, Poll};
 use std::time::{Duration, Instant};
 
-
-use crate::asyncs::tkocncel::CancellationToken;
+use crate::asyncs::tkocncel;
 
 #[derive(Clone)]
 pub struct Context {
-    token: CancellationToken,
+    token: tkocncel::CancellationToken,
     // 记录 Context 创建的绝对时间点
     time_start: Instant,
     timeout_dur: Option<Duration>,
@@ -22,7 +21,7 @@ pub struct Context {
 impl Context {
     pub fn new() -> Self {
         Self {
-            token: CancellationToken::new(),
+            token: tkocncel::CancellationToken::new(),
             time_start: Instant::now(),
             timeout_dur: None,
             tmout_cncl: Arc::new(AtomicBool::new(false)),
@@ -30,7 +29,7 @@ impl Context {
     }
     pub fn new_timeout(tmd: Duration) -> Self {
         Self {
-            token: CancellationToken::new(),
+            token: tkocncel::CancellationToken::new(),
             time_start: Instant::now(),
             timeout_dur: Some(tmd),
             tmout_cncl: Arc::new(AtomicBool::new(true)),
@@ -78,9 +77,15 @@ impl Context {
         }
     }
 
+    pub fn future(&self) -> ContextFuture {
+        ContextFuture::new(self)
+    }
     /// 获取取消信号的 Future
-    pub fn cancelled_future(&self) -> impl Future<Output = ()> + '_ {
+    pub fn cancelled_future(&self) -> tkocncel::WaitForCancellationFuture<'_> {
         self.token.cancelled()
+    }
+    pub fn cancelled_ownedfut(&self) -> tkocncel::WaitForCancellationFutureOwned {
+        self.token.clone().cancelled_owned()
     }
 
     /// 【核心修改】
@@ -274,5 +279,47 @@ impl From<&Option<Context>> for Context {
             Some(v) => v.child(),
             None => Self::new(),
         }
+    }
+}
+
+pub struct ContextFuture {
+    ctx: Context,
+    cancel_fut: Pin<Box<tkocncel::WaitForCancellationFutureOwned>>,
+    timeout_fut: Option<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
+}
+impl ContextFuture {
+    fn new(ctx: &Context) -> Self {
+        let timeout_fut = ctx.timeout_dur.map(|dur| {
+            let elapsed = ctx.time_start.elapsed();
+            if elapsed >= dur {
+                Box::pin(std::future::ready(()))
+                    as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
+            } else {
+                Box::pin(tokio::time::sleep(dur - elapsed))
+                    as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
+            }
+        });
+        Self {
+            ctx: ctx.clone(),
+            cancel_fut: Box::pin(ctx.cancelled_ownedfut()),
+            timeout_fut,
+        }
+    }
+}
+impl Future for ContextFuture {
+    type Output = CtxWaitRes<()>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        if self.cancel_fut.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(CtxWaitRes::Cancel);
+        }
+        if let Some(timeout_fut) = self.timeout_fut.as_mut() {
+            if timeout_fut.as_mut().poll(cx).is_ready() {
+                if self.ctx.tmout_cncl.load(Ordering::SeqCst) {
+                    self.ctx.cancel();
+                }
+                return Poll::Ready(CtxWaitRes::Timeout);
+            }
+        }
+        Poll::Pending
     }
 }
