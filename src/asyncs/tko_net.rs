@@ -20,7 +20,7 @@ struct BoxTcpStreamInr<IO> {
     tmr: crate::Timer,
     tmslpr: Pin<Box<tokio::time::Sleep>>,
     tmslpw: Pin<Box<tokio::time::Sleep>>,
-    stream: IO,
+    stream: Pin<Box<IO>>,
     // ln_rd: AtomicUsize,
     // ln_wd: AtomicUsize,
 }
@@ -58,7 +58,7 @@ impl<IO> BoxStream<IO> {
                 tmr: tmr,
                 tmslpr: Box::pin(tokio::time::sleep(SLEEP_DURATION)),
                 tmslpw: Box::pin(tokio::time::sleep(SLEEP_DURATION)),
-                stream: stream,
+                stream: Box::pin(stream),
                 // ln_rd: AtomicUsize::new(0),
                 // ln_wd: AtomicUsize::new(0),
             }),
@@ -90,7 +90,7 @@ where
             )));
         }
         let this = self.get_mut();
-        let rst = std::pin::Pin::new(&mut this.inner.stream).poll_read(cx, buf);
+        let rst = this.inner.stream.as_mut().poll_read(cx, buf);
         match &rst {
             std::task::Poll::Ready(Ok(_v)) => {
                 if buf.filled().len() > 0 {
@@ -137,7 +137,7 @@ where
             )));
         }
         let this = self.get_mut();
-        let rst = std::pin::Pin::new(&mut this.inner.stream).poll_write(cx, buf);
+        let rst = this.inner.stream.as_mut().poll_write(cx, buf);
 
         match &rst {
             std::task::Poll::Ready(Ok(n)) => {
@@ -178,7 +178,7 @@ where
             )));
         } */
         let this = self.get_mut();
-        std::pin::Pin::new(&mut this.inner.stream).poll_flush(cx)
+        this.inner.stream.as_mut().poll_flush(cx)
     }
 
     fn poll_shutdown(
@@ -186,6 +186,6 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         let this = self.get_mut();
-        std::pin::Pin::new(&mut this.inner.stream).poll_shutdown(cx)
+        this.inner.stream.as_mut().poll_shutdown(cx)
     }
 }
