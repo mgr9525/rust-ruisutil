@@ -205,7 +205,7 @@ impl<T> CtxWaitRes<T> {
         }
     }
 
-    pub fn io_rsts(self) -> std::io::Result<T> {
+    pub fn io_rsto(self) -> std::io::Result<T> {
         match self {
             CtxWaitRes::Ok(v) => Ok(v),
             CtxWaitRes::Cancel => Err(crate::ioerr(
@@ -234,6 +234,29 @@ impl<T> CtxWaitRes<T> {
             )),
             CtxWaitRes::Timeout => Err(crate::ioerr(
                 "ctx timeout",
+                Some(std::io::ErrorKind::TimedOut),
+            )),
+        }
+    }
+    pub fn io_rsts<D, S>(self, nms: S) -> std::io::Result<D>
+    where
+        T: Into<std::io::Result<D>>,
+        S: AsRef<str>,
+    {
+        match self {
+            CtxWaitRes::Ok(v) => match v.into() {
+                Ok(v) => Ok(v),
+                Err(e) => Err(std::io::Error::new(
+                    e.kind(),
+                    format!("'{}' work err: {}", nms.as_ref(), e),
+                )),
+            },
+            CtxWaitRes::Cancel => Err(crate::ioerr(
+                format!("'{}' ctx cancel", nms.as_ref()),
+                Some(std::io::ErrorKind::Interrupted),
+            )),
+            CtxWaitRes::Timeout => Err(crate::ioerr(
+                format!("'{}' ctx timeout", nms.as_ref()),
                 Some(std::io::ErrorKind::TimedOut),
             )),
         }
