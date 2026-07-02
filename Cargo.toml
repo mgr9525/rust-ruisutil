@@ -12,7 +12,9 @@ parking_lot = "0.12"
 pin-project-lite = "0.2"
 
 futures = {version = "0.3",optional = true}
-rust-crypto = {version="0.2.36", optional = true}
+# rust-crypto = {version="0.2.36", optional = true}
+sha1 =  {version="0.10", optional = true}
+sha2 = {version="0.10",  optional = true}
 # rand = "0.8.4"
 log = {version="0.4.*", features = ["std"], optional = true}
 chrono = {version="0.4", optional = true}
@@ -29,6 +31,6 @@ tokios=["tokio","futures"]
 times=["chrono"]
 logs=["log","filesplit","times"]
 cryptos=["sha"]
-sha=["rust-crypto"]
+sha=["sha1","sha2"]
 filesplit=[]
 mini=[]
