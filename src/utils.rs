@@ -56,7 +56,7 @@ pub fn byte_2i(bts: &[u8]) -> i64 {
     rt
 }
 
-pub fn i2_byte(v: i64, n: usize) -> Box<[u8]> {
+pub fn i2_byte(v: i64, n: usize) -> Vec<u8> {
     let mut rt: Vec<u8> = Vec::with_capacity(n);
     // if n>4{return rt;}
     for i in 0..n {
@@ -67,7 +67,7 @@ pub fn i2_byte(v: i64, n: usize) -> Box<[u8]> {
             rt.push(v as u8)
         }
     }
-    rt.into_boxed_slice()
+    rt
 }
 
 pub fn ioerr<E>(s: E, kd: Option<io::ErrorKind>) -> io::Error
@@ -111,9 +111,9 @@ pub fn parse_noip_addr<T: AsRef<str>>(s: T) -> String {
         None => format!("{}:0", s.as_ref()),
     }
 }
-pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Box<[u8]>> {
+pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Vec<u8>> {
     if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
+        return Ok(Vec::new());
     }
     let mut rn = 0usize;
     let mut data = vec![0u8; ln];
@@ -134,7 +134,7 @@ pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Re
             Err(e) => return Err(e),
         }
     }
-    Ok(data.into_boxed_slice())
+    Ok(data)
 }
 pub fn tcp_write(ctx: &Context, stream: &mut net::TcpStream, bts: &[u8]) -> io::Result<usize> {
     if bts.len() <= 0 {

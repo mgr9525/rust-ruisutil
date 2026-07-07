@@ -9,154 +9,6 @@ use bytes::BufMut;
 
 use crate::{bytes::BytesCut, ioerr};
 
-/* #[derive(Clone)]
-pub struct ByteBox {
-    start: usize,
-    end: usize,
-    data: Arc<Box<[u8]>>,
-}
-impl Deref for ByteBox {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &self.data[self.start..self.end]
-    }
-}
-impl ByteBox {
-    pub fn new(dt: Arc<Box<[u8]>>, start: usize, end: usize) -> Self {
-        Self {
-            start: start,
-            end: if end > 0 { end } else { dt.len() },
-            data: dt,
-        }
-    }
-    pub fn news(dt: Box<[u8]>, start: usize, end: usize) -> Self {
-        Self {
-            start: start,
-            end: end,
-            data: Arc::new(dt),
-        }
-    }
-    pub fn newlen(dt: Box<[u8]>, end: usize) -> Self {
-        Self::news(dt, 0, end)
-    }
-    pub fn cut(&mut self, pos: usize) -> io::Result<Self> {
-        let posd = pos + self.start;
-        if posd < self.start || posd > self.end {
-            Err(ioerr(
-                format!(
-                    "ByteBox.cut pos err:posd={},s={},e={}",
-                    posd, self.start, self.end
-                ),
-                None,
-            ))
-        } else {
-            let rt = Self {
-                start: posd,
-                end: self.end,
-                data: self.data.clone(),
-            };
-            self.end = posd;
-            Ok(rt)
-        }
-    }
-    pub fn cuts(&mut self, pos: usize) -> io::Result<Self> {
-        let posd = pos + self.start;
-        if posd < self.start || posd > self.end {
-            Err(ioerr(
-                format!(
-                    "ByteBox.cuts pos err:posd={},s={},e={}",
-                    posd, self.start, self.end
-                ),
-                None,
-            ))
-        /* }else if posd == self.end {
-        let rt = Self {
-            start: self.start,
-            end: posd,
-            data: self.data.clone(),
-        }; */
-        } else {
-            let rt = Self {
-                start: self.start,
-                end: posd,
-                data: self.data.clone(),
-            };
-            self.start = posd;
-            Ok(rt)
-        }
-    }
-    /* pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
-        let posd = pos + self.start;
-        if posd < self.start || posd >= self.end {
-            Err(ioerr("pos err", None))
-        } else {
-            let rt = Self {
-                start: self.start,
-                end: posd,
-                data: self.data.clone(),
-            };
-            self.start = posd;
-            Ok(rt)
-        }
-    } */
-    /* pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
-        if pos <= self.start || pos >= self.end {
-            Err(ioerr("pos err", None))
-        } else {
-            let c = Self {
-                start: self.start,
-                end: pos,
-                data: self.data.clone(),
-            };
-            self.start = pos;
-            Ok(c)
-        }
-    } */
-
-    pub fn clones(&self, start: usize, end: usize) -> io::Result<Self> {
-        if start < self.start || end > self.end {
-            Err(ioerr("len err", None))
-        } else {
-            Ok(Self {
-                start: start,
-                end: end,
-                data: self.data.clone(),
-            })
-        }
-    }
-
-    /* pub fn bytes(&mut self) -> Box<[u8]> {
-        let tmp = Vec::new().into_boxed_slice();
-        let bts = std::mem::replace(&mut self.data, Arc::new(tmp));
-        let t=Arc::downgrade(&bts);
-        *t
-    } */
-}
-impl From<Vec<u8>> for ByteBox {
-    fn from(v: Vec<u8>) -> Self {
-        let ln = v.len();
-        Self::new(Arc::new(v.into_boxed_slice()), 0, ln)
-    }
-}
-impl From<Box<[u8]>> for ByteBox {
-    fn from(v: Box<[u8]>) -> Self {
-        let ln = v.len();
-        Self::new(Arc::new(v), 0, ln)
-    }
-}
-impl From<Arc<Box<[u8]>>> for ByteBox {
-    fn from(v: Arc<Box<[u8]>>) -> Self {
-        let ln = v.len();
-        Self::new(v, 0, ln)
-    }
-}
-impl From<&[u8]> for ByteBox {
-    fn from(v: &[u8]) -> Self {
-        Self::from(v.to_vec())
-    }
-} */
-
 #[derive(Clone)]
 pub struct ByteBoxBuf {
     count: usize,
@@ -191,23 +43,6 @@ impl ByteBoxBuf {
     pub fn pushs(&mut self, dt: Vec<u8>, n: usize) {
         self.push(super::bytes_with_len(dt, n));
     }
-    /* pub fn push_start(&mut self, dt: Arc<Box<[u8]>>, start: usize) {
-        let ln = dt.len();
-        if ln > 0 {
-            self.pushs(dt, start, ln);
-        }
-    }
-    pub fn push_len(&mut self, dt: Arc<Box<[u8]>>, len: usize) -> usize {
-        let mut ln = dt.len();
-        if len < ln {
-            ln = len;
-        }
-        if ln > 0 {
-            self.pushs(dt, 0, ln);
-        }
-
-        ln
-    } */
     pub fn pull(&mut self) -> Option<bytes::Bytes> {
         match self.list.pop_front() {
             None => None,
@@ -264,7 +99,7 @@ impl ByteBoxBuf {
         }
         Err(ioerr("not found index byte", None))
     }
-    pub fn gets(&self, start: usize, len: usize) -> io::Result<(Box<[u8]>, usize)> {
+    pub fn gets(&self, start: usize, len: usize) -> io::Result<(Vec<u8>, usize)> {
         if len <= 0 {
             return Err(ioerr("len err", None));
         }
@@ -304,7 +139,7 @@ impl ByteBoxBuf {
             ));
         }
 
-        Ok((rtbts.into_boxed_slice(), start + len))
+        Ok((rtbts, start + len))
     }
     pub fn cut_front(&mut self, pos: usize) -> io::Result<Self> {
         if pos > self.count {
@@ -342,17 +177,6 @@ impl ByteBoxBuf {
 
         Ok(frt)
     }
-    /* pub fn to_bytes(&self) -> Box<[u8]> {
-        let mut rtbts: Vec<u8> = Vec::with_capacity(self.count);
-        let mut itr = self.list.iter();
-        while let Some(v) = itr.next() {
-            // rtbts.copy_from_slice(src)
-            for b in &v[..] {
-                rtbts.push(*b);
-            }
-        }
-        rtbts.into_boxed_slice()
-    } */
     pub fn to_bytes(&self) -> bytes::Bytes {
         let mut buf = bytes::BytesMut::with_capacity(self.count);
         // let mut pos = 0usize;
