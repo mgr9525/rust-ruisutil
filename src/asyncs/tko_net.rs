@@ -71,12 +71,12 @@ impl<IO> BoxStream<IO> {
     }
 }
 
-impl<IO> tokio::io::AsyncRead for BoxStream<IO>
+impl<IO> BoxStream<IO>
 where
     IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+    pub fn poll_reads(
+        &mut self,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
@@ -89,20 +89,19 @@ where
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         }
-        let this = self.get_mut();
-        let rst = this.inner.stream.as_mut().poll_read(cx, buf);
+        let rst = self.inner.stream.as_mut().poll_read(cx, buf);
         match &rst {
             std::task::Poll::Ready(Ok(_v)) => {
                 if buf.filled().len() > 0 {
-                    this.inner.tmr.reset();
+                    self.inner.tmr.reset();
                     // this.inner
                     //     .ln_rd
                     //     .fetch_add(buf.filled().len(), std::sync::atomic::Ordering::Relaxed);
-                    Self::reset_tmslp(this.inner.tmslpr.as_mut());
+                    Self::reset_tmslp(self.inner.tmslpr.as_mut());
                 }
             }
             std::task::Poll::Pending => {
-                if let std::task::Poll::Ready(v) = this.inner.ctxfut.as_mut().poll(cx) {
+                if let std::task::Poll::Ready(v) = self.inner.ctxfut.as_mut().poll(cx) {
                     if !v.is_ok() {
                         return std::task::Poll::Ready(Err(crate::ioerr(
                             "ctx end, poll ctxfut err",
@@ -110,20 +109,16 @@ where
                         )));
                     }
                 }
-                let _v = std::task::ready!(this.inner.tmslpr.as_mut().poll(cx));
-                Self::reset_tmslp(this.inner.tmslpr.as_mut());
+                let _v = std::task::ready!(self.inner.tmslpr.as_mut().poll(cx));
+                Self::reset_tmslp(self.inner.tmslpr.as_mut());
             }
             _ => {}
         }
         rst
     }
-}
-impl<IO> tokio::io::AsyncWrite for BoxStream<IO>
-where
-    IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
-{
-    fn poll_write(
-        self: std::pin::Pin<&mut Self>,
+    
+    pub fn poll_writes(
+        &mut self,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
@@ -136,22 +131,20 @@ where
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         }
-        let this = self.get_mut();
-        let rst = this.inner.stream.as_mut().poll_write(cx, buf);
-
+        let rst = self.inner.stream.as_mut().poll_write(cx, buf);
         match &rst {
             std::task::Poll::Ready(Ok(n)) => {
                 let ln = *n;
                 if ln > 0 {
-                    this.inner.tmr.reset();
+                    self.inner.tmr.reset();
                     // this.inner
                     //     .ln_wd
                     //     .fetch_add(ln, std::sync::atomic::Ordering::Relaxed);
-                    Self::reset_tmslp(this.inner.tmslpw.as_mut());
+                    Self::reset_tmslp(self.inner.tmslpw.as_mut());
                 }
             }
             std::task::Poll::Pending => {
-                if let std::task::Poll::Ready(v) = this.inner.ctxfut.as_mut().poll(cx) {
+                if let std::task::Poll::Ready(v) = self.inner.ctxfut.as_mut().poll(cx) {
                     if !v.is_ok() {
                         return std::task::Poll::Ready(Err(crate::ioerr(
                             "ctx end, poll ctxfut err",
@@ -159,16 +152,16 @@ where
                         )));
                     }
                 }
-                let _v = std::task::ready!(this.inner.tmslpw.as_mut().poll(cx));
-                Self::reset_tmslp(this.inner.tmslpw.as_mut());
+                let _v = std::task::ready!(self.inner.tmslpw.as_mut().poll(cx));
+                Self::reset_tmslp(self.inner.tmslpw.as_mut());
             }
             _ => {}
         }
         rst
     }
 
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
+    pub fn poll_flushs(
+        &mut self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         /* if self.ctx.cancelled() {
@@ -177,15 +170,52 @@ where
                 Some(std::io::ErrorKind::BrokenPipe),
             )));
         } */
-        let this = self.get_mut();
-        this.inner.stream.as_mut().poll_flush(cx)
+        self.inner.stream.as_mut().poll_flush(cx)
+    }
+
+    pub fn poll_shutdowns(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        self.inner.stream.as_mut().poll_shutdown(cx)
+    }
+}
+
+impl<IO> tokio::io::AsyncRead for BoxStream<IO>
+where
+    IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        self.get_mut().poll_reads(cx, buf)
+    }
+}
+impl<IO> tokio::io::AsyncWrite for BoxStream<IO>
+where
+    IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        self.get_mut().poll_writes(cx, buf)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        self.get_mut().poll_flushs(cx)
     }
 
     fn poll_shutdown(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        let this = self.get_mut();
-        this.inner.stream.as_mut().poll_shutdown(cx)
+        self.get_mut().poll_shutdowns(cx)
     }
 }
