@@ -246,9 +246,9 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
     ctx: &asyncs::Context,
     stream: &mut T,
     ln: usize,
-) -> io::Result<Box<[u8]>> {
+) -> io::Result<Vec<u8>> {
     if ln <= 0 {
-        return Ok(Vec::new().into_boxed_slice());
+        return Ok(Vec::new());
     }
     ctx.wait_fut(async {
         let mut rn = 0usize;
@@ -270,7 +270,7 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
                 Err(e) => return Err(e),
             }
         }
-        Ok(data.into_boxed_slice())
+        Ok(data)
     })
     .await
     .io_rst()
@@ -345,13 +345,9 @@ pub fn read_allbuf<T: std::io::Read>(
 
     Ok(buf)
 }
-pub fn read_all<T: std::io::Read>(
-    ctx: &Context,
-    stream: &mut T,
-    ln: usize,
-) -> io::Result<Box<[u8]>> {
+pub fn read_all<T: std::io::Read>(ctx: &Context, stream: &mut T, ln: usize) -> io::Result<Vec<u8>> {
     if ln <= 0 {
-        return Ok(Box::new([0u8; 0]));
+        return Ok(Vec::new());
     }
     let mut rn = 0usize;
     let mut data = vec![0u8; ln];
@@ -375,7 +371,7 @@ pub fn read_all<T: std::io::Read>(
             Err(e) => return Err(e),
         }
     }
-    Ok(data.into_boxed_slice())
+    Ok(data)
 }
 pub fn write_all<T: std::io::Write>(
     ctx: &Context,
@@ -492,9 +488,9 @@ pub fn md5strs<S: AsRef<[u8]>>(input: S) -> String {
     format!("{:x}", ms)
 }
 #[cfg(feature = "sha")]
-pub use sha2::Digest as ShaDigest;
-#[cfg(feature = "sha")]
 pub use sha1::Sha1 as CryptoSha1;
+#[cfg(feature = "sha")]
+pub use sha2::Digest as ShaDigest;
 #[cfg(feature = "sha")]
 pub use sha2::Sha256 as CryptoSha256;
 /* #[cfg(feature = "sha")]
