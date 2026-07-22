@@ -116,10 +116,10 @@ pub fn tcp_reads(
     stream: &mut net::TcpStream,
     ln: usize,
     mut bufln: usize,
-) -> io::Result<(bytes::Bytes, crate::bytes::ByteBoxBuf)> {
+) -> io::Result<(Vec<u8>, crate::bytes::ByteBoxBuf)> {
     let mut rts = crate::bytes::ByteBoxBuf::new();
     if ln <= 0 {
-        return Ok((bytes::Bytes::new(), rts));
+        return Ok((Vec::new(), rts));
     }
     if bufln <= 0 {
         bufln = 32 * 1024;
@@ -144,8 +144,8 @@ pub fn tcp_reads(
             Err(e) => return Err(e),
         }
     }
-    let bts = rts.cut_front(ln)?;
-    Ok((bts.to_bytes(), rts))
+    let (bts, _) = rts.gets(0, ln)?;
+    Ok((bts, rts))
 }
 pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Vec<u8>> {
     if ln <= 0 {
@@ -318,10 +318,10 @@ pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
     stream: &mut T,
     ln: usize,
     mut bufln: usize,
-) -> io::Result<(bytes::Bytes, crate::bytes::ByteBoxBuf)> {
+) -> io::Result<(Vec<u8>, crate::bytes::ByteBoxBuf)> {
     let mut rts = crate::bytes::ByteBoxBuf::new();
     if ln <= 0 {
-        return Ok((bytes::Bytes::new(), rts));
+        return Ok((Vec::new(), rts));
     }
     if bufln <= 0 {
         bufln = 32 * 1024;
@@ -347,8 +347,8 @@ pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
                 Err(e) => return Err(e),
             }
         }
-        let bts = rts.cut_front(ln)?;
-        Ok((bts.to_bytes(), rts))
+        let (bts, _) = rts.gets(0, ln)?;
+        Ok((bts, rts))
     })
     .await
     .io_rst()
