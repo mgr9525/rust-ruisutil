@@ -111,6 +111,42 @@ pub fn parse_noip_addr<T: AsRef<str>>(s: T) -> String {
         None => format!("{}:0", s.as_ref()),
     }
 }
+pub fn tcp_reads(
+    ctx: &Context,
+    stream: &mut net::TcpStream,
+    ln: usize,
+    mut bufln: usize,
+) -> io::Result<(bytes::Bytes, crate::bytes::ByteBoxBuf)> {
+    let mut rts = crate::bytes::ByteBoxBuf::new();
+    if ln <= 0 {
+        return Ok((bytes::Bytes::new(), rts));
+    }
+    if bufln <= 0 {
+        bufln = 32 * 1024;
+    }
+    let mut rn = 0usize;
+    while rn < ln {
+        if ctx.done() {
+            return Err(io::Error::new(io::ErrorKind::Other, "ctx end!"));
+        }
+        let mut data = vec![0u8; bufln];
+        match stream.read(&mut data[rn..]) {
+            Ok(n) => {
+                if n > 0 {
+                    rn += n;
+                    rts.pushs(data, n);
+                } else {
+                    // let bts=&data[..];
+                    // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                    return Err(io::Error::new(io::ErrorKind::Other, "read err!"));
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    let bts = rts.cut_front(ln)?;
+    Ok((bts.to_bytes(), rts))
+}
 pub fn tcp_read(ctx: &Context, stream: &mut net::TcpStream, ln: usize) -> io::Result<Vec<u8>> {
     if ln <= 0 {
         return Ok(Vec::new());
@@ -271,6 +307,48 @@ pub async fn read_all_async<T: asyncs::AsyncReadExt + Unpin>(
             }
         }
         Ok(data)
+    })
+    .await
+    .io_rst()
+}
+
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
+    ctx: &asyncs::Context,
+    stream: &mut T,
+    ln: usize,
+    mut bufln: usize,
+) -> io::Result<(bytes::Bytes, crate::bytes::ByteBoxBuf)> {
+    let mut rts = crate::bytes::ByteBoxBuf::new();
+    if ln <= 0 {
+        return Ok((bytes::Bytes::new(), rts));
+    }
+    if bufln <= 0 {
+        bufln = 32 * 1024;
+    }
+    ctx.wait_fut(async {
+        let mut rn = 0usize;
+        while rn < ln {
+            let mut data = vec![0u8; bufln];
+            match stream.read(&mut data[rn..]).await {
+                Ok(n) => {
+                    if n > 0 {
+                        rn += n;
+                        rts.pushs(data, n);
+                    } else {
+                        // let bts=&data[..];
+                        // println!("read errs:ln:{},rn:{},n:{}，dataln:{}，bts:{}",ln,rn,n,data.len(),bts.len());
+                        return Err(io::Error::new(
+                            io::ErrorKind::UnexpectedEof,
+                            format!("read err len:{}!", n),
+                        ));
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        let bts = rts.cut_front(ln)?;
+        Ok((bts.to_bytes(), rts))
     })
     .await
     .io_rst()
