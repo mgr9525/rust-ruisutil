@@ -106,7 +106,7 @@ impl ByteBoxBuf {
         if start >= self.count || start + len > self.count {
             return Err(ioerr("pos out limit", None));
         }
-        let mut rtbts: Vec<u8> = Vec::new();
+        let mut rtbts: Vec<u8> = Vec::with_capacity(len);
         let mut start_real = start;
         let mut len_real = len;
         let itr = self.list.iter();
@@ -178,6 +178,11 @@ impl ByteBoxBuf {
         Ok(frt)
     }
     pub fn to_bytes(&self) -> bytes::Bytes {
+        if self.list.len() == 1 {
+            if let Some(bts) = self.list.front() {
+                return bts.clone();
+            }
+        }
         let mut buf = bytes::BytesMut::with_capacity(self.count);
         // let mut pos = 0usize;
         // let mut rtbts = vec![0u8; self.count].into_boxed_slice();
