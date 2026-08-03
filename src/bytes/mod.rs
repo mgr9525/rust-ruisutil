@@ -4,6 +4,8 @@ pub use bytes::ByteBoxBuf;
 pub use circle::CircleBuf;
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
 pub use stream::ByteSteamBuf;
+#[cfg(any(feature = "asyncs", feature = "tokios"))]
+pub use stream::PeekStream;
 
 mod bytes;
 mod circle;
