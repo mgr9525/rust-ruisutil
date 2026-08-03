@@ -6,6 +6,7 @@ use std::{
 };
 
 use asyncs::sync::RwLock;
+use bytes::BufMut;
 
 use crate::{asyncs, bytes::BytesCut, sync::WakerFut};
 
@@ -384,5 +385,137 @@ impl crate::asyncs::AsyncWrite for ByteSteamBuf {
     ) -> std::task::Poll<Result<(), io::Error>> {
         self.close();
         std::task::Poll::Ready(Ok(()))
+    }
+}
+
+pub struct PeekStream<IO> {
+    inner: Box<PeekInner<IO>>,
+}
+struct PeekInner<IO> {
+    ctx: crate::asyncs::Context,
+    otrbts: ByteBoxBuf,
+    stream: std::pin::Pin<Box<IO>>,
+}
+impl<IO> PeekStream<IO> {
+    pub fn new(ctx: &crate::asyncs::Context, stream: IO) -> Self {
+        Self {
+            inner: Box::new(PeekInner {
+                ctx: ctx.clone(),
+                stream: Box::pin(stream),
+                otrbts: ByteBoxBuf::new(),
+            }),
+        }
+    }
+    pub fn push_otrbts<T: Into<bytes::Bytes>>(&mut self, data: T) {
+        let bts = data.into();
+        if bts.len() <= 0 {
+            return;
+        }
+        self.inner.otrbts.push(bts);
+    }
+    pub fn push_otrbuf(&mut self, buf: &ByteBoxBuf) {
+        if buf.len() <= 0 {
+            return;
+        }
+        self.inner.otrbts.push_all(buf);
+    }
+    pub fn repush_otrbuf(&mut self, buf: ByteBoxBuf) {
+        if buf.len() <= 0 {
+            return;
+        }
+        if self.inner.otrbts.len() <= 0 {
+            self.inner.otrbts = buf;
+        } else {
+            // 从后向前
+            for it in buf.iter().rev() {
+                self.inner.otrbts.push_front(it.clone());
+            }
+        }
+    }
+    /* pub fn own_io(&mut self) -> IO {
+        std::mem::take(&mut self.inner.stream)
+    } */
+}
+impl<IO> PeekInner<IO>
+where
+    IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    fn poll_reads(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        if self.otrbts.len() > 0 {
+            if let Some(mut bts) = self.otrbts.pull() {
+                let cap = buf.remaining();
+                let bt = bts.split_tos(cap);
+                if bts.len() > 0 {
+                    self.otrbts.push_front(bts);
+                }
+                buf.put(bt);
+                return std::task::Poll::Ready(Ok(()));
+            }
+        }
+        self.stream.as_mut().poll_read(cx, buf)
+    }
+}
+#[cfg(feature = "tokios")]
+impl<IO> tokio::io::AsyncRead for PeekStream<IO>
+where
+    IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        if self.inner.ctx.cancelled() {
+            return std::task::Poll::Ready(Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "ctx end,conn",
+            )));
+        }
+        let this = self.get_mut();
+        let rst = this.inner.poll_reads(cx, buf);
+        rst
+    }
+}
+
+#[cfg(feature = "tokios")]
+impl<IO> tokio::io::AsyncWrite for PeekStream<IO>
+where
+    IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        if self.inner.ctx.cancelled() {
+            return std::task::Poll::Ready(Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "ctx end,conn",
+            )));
+        }
+        let this = self.get_mut();
+        let rst = this.inner.stream.as_mut().poll_write(cx, buf);
+        rst
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        this.inner.stream.as_mut().poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        // log::debug!("TcpConn shutdown: addr={}", &self.inner.info.addrcli());
+        let this = self.get_mut();
+        this.inner.stream.as_mut().poll_shutdown(cx)
     }
 }
