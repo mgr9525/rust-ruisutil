@@ -330,7 +330,7 @@ pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
         let mut rn = 0usize;
         while rn < ln {
             let mut data = vec![0u8; bufln];
-            match stream.read(&mut data[rn..]).await {
+            match stream.read(&mut data[..]).await {
                 Ok(n) => {
                     if n > 0 {
                         rn += n;
