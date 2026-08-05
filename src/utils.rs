@@ -1,5 +1,5 @@
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
-use crate::asyncs::{self, AsyncReadExt, AsyncWriteExt};
+use crate::asyncs;
 #[cfg(feature = "chrono")]
 use chrono::TimeZone;
 use std::{
@@ -329,7 +329,8 @@ pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
     ctx.wait_fut(async {
         let mut rn = 0usize;
         while rn < ln {
-            let mut data = vec![0u8; bufln];
+            let read_len = bufln.max(ln - rn);
+            let mut data = vec![0u8; read_len];
             match stream.read(&mut data[..]).await {
                 Ok(n) => {
                     if n > 0 {

@@ -5,10 +5,8 @@ use std::{
     time::Duration,
 };
 
-use asyncs::sync::RwLock;
-use bytes::BufMut;
-
 use crate::{asyncs, bytes::BytesCut, sync::WakerFut};
+use asyncs::sync::RwLock;
 
 use super::ByteBoxBuf;
 
@@ -445,17 +443,30 @@ where
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        if self.otrbts.len() > 0 {
+        if buf.remaining() <= 0 {
+            return std::task::Poll::Ready(Ok(()));
+        }
+
+        let mut read_otrbts = false;
+        while self.otrbts.len() > 0 && buf.remaining() > 0 {
             if let Some(mut bts) = self.otrbts.pull() {
-                let cap = buf.remaining();
-                let bt = bts.split_tos(cap);
+                let bt = bts.split_tos(buf.remaining());
                 if bts.len() > 0 {
                     self.otrbts.push_front(bts);
                 }
-                buf.put(bt);
-                return std::task::Poll::Ready(Ok(()));
+                if bt.len() > 0 {
+                    buf.put_slice(&bt);
+                    read_otrbts = true;
+                }
+            } else {
+                break;
             }
         }
+
+        if read_otrbts {
+            return std::task::Poll::Ready(Ok(()));
+        }
+
         self.stream.as_mut().poll_read(cx, buf)
     }
 }
@@ -478,6 +489,74 @@ where
         let this = self.get_mut();
         let rst = this.inner.poll_reads(cx, buf);
         rst
+    }
+}
+
+#[cfg(all(test, feature = "tokios"))]
+mod tests {
+    use super::PeekStream;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn poll_reads_fills_from_multiple_otrbts_chunks() {
+        let ctx = crate::asyncs::Context::new();
+        let (stream, _peer) = tokio::io::duplex(64);
+        let mut stream = PeekStream::new(&ctx, stream);
+
+        stream.push_otrbts("ab");
+        stream.push_otrbts("cd");
+        stream.push_otrbts("ef");
+
+        let mut buf = [0u8; 5];
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 5);
+        assert_eq!(&buf, b"abcde");
+
+        let mut buf = [0u8; 5];
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(&buf[..n], b"f");
+    }
+
+    #[tokio::test]
+    async fn poll_reads_keeps_remainder_when_readbuf_is_smaller_than_chunk() {
+        let ctx = crate::asyncs::Context::new();
+        let (stream, _peer) = tokio::io::duplex(64);
+        let mut stream = PeekStream::new(&ctx, stream);
+
+        stream.push_otrbts("abcdef");
+
+        let mut buf = [0u8; 2];
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(&buf, b"ab");
+
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(&buf, b"cd");
+
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(&buf, b"ef");
+    }
+
+    #[tokio::test]
+    async fn poll_reads_uses_stream_after_otrbts_is_empty() {
+        let ctx = crate::asyncs::Context::new();
+        let (stream, mut peer) = tokio::io::duplex(64);
+        let mut stream = PeekStream::new(&ctx, stream);
+
+        stream.push_otrbts("ab");
+        peer.write_all(b"cd").await.unwrap();
+
+        let mut buf = [0u8; 2];
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(&buf, b"ab");
+
+        let n = stream.read(&mut buf).await.unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(&buf, b"cd");
     }
 }
 
