@@ -329,8 +329,7 @@ pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
     ctx.wait_fut(async {
         let mut rn = 0usize;
         while rn < ln {
-            let read_len = bufln.max(ln - rn);
-            let mut data = vec![0u8; read_len];
+            let mut data = vec![0u8; bufln];
             match stream.read(&mut data[..]).await {
                 Ok(n) => {
                     if n > 0 {
@@ -353,6 +352,58 @@ pub async fn read_alls_async<T: asyncs::AsyncReadExt + Unpin>(
     })
     .await
     .io_rst()
+}
+
+#[cfg(all(test, feature = "tokios"))]
+mod tests {
+    use super::read_alls_async;
+    use crate::bytes::PeekStream;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn read_alls_async_reads_ahead_and_returns_all_read_bytes() {
+        let ctx = crate::asyncs::Context::new();
+        let (mut stream, mut peer) = tokio::io::duplex(64);
+
+        peer.write_all(b"abcdef").await.unwrap();
+
+        let (data, buf) = read_alls_async(&ctx, &mut stream, 5, 32).await.unwrap();
+        assert_eq!(data, b"abcde");
+        assert_eq!(buf.len(), 6);
+        assert_eq!(&buf.to_bytes()[..], b"abcdef");
+    }
+
+    #[tokio::test]
+    async fn read_alls_async_read_ahead_buffer_can_be_replayed_by_peekstream() {
+        let ctx = crate::asyncs::Context::new();
+        let (mut stream, mut peer) = tokio::io::duplex(64);
+
+        peer.write_all(b"abcdef").await.unwrap();
+
+        let (data, buf) = read_alls_async(&ctx, &mut stream, 5, 32).await.unwrap();
+        assert_eq!(data, b"abcde");
+
+        let (inner, _unused_peer) = tokio::io::duplex(64);
+        let mut peek = PeekStream::new(&ctx, inner);
+        peek.push_otrbuf(&buf);
+
+        let mut replayed = [0u8; 6];
+        peek.read_exact(&mut replayed).await.unwrap();
+        assert_eq!(&replayed, b"abcdef");
+    }
+
+    #[tokio::test]
+    async fn read_alls_async_uses_bufln_as_read_ahead_chunk_size() {
+        let ctx = crate::asyncs::Context::new();
+        let (mut stream, mut peer) = tokio::io::duplex(64);
+
+        peer.write_all(b"abcdef").await.unwrap();
+
+        let (data, buf) = read_alls_async(&ctx, &mut stream, 5, 2).await.unwrap();
+        assert_eq!(data, b"abcde");
+        assert_eq!(buf.len(), 6);
+        assert_eq!(&buf.to_bytes()[..], b"abcdef");
+    }
 }
 
 #[cfg(any(feature = "asyncs", feature = "tokios"))]
