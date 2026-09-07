@@ -776,3 +776,10 @@ pub fn strptime_off(t: &str, s: &str, hour: i32) -> io::Result<SystemTime> {
         },
     }
 }
+
+pub fn timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|v| v.as_secs())
+        .unwrap_or(0)
+}
