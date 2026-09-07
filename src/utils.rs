@@ -620,7 +620,9 @@ pub fn md5strs<S: AsRef<[u8]>>(input: S) -> String {
 #[cfg(feature = "sha")]
 pub use sha1::Sha1 as CryptoSha1;
 #[cfg(feature = "sha")]
-pub use sha2::Digest as ShaDigest;
+pub use sha1::Digest as Sha1Digest;
+#[cfg(feature = "sha")]
+pub use sha2::Digest as Sha2Digest;
 #[cfg(feature = "sha")]
 pub use sha2::Sha256 as CryptoSha256;
 /* #[cfg(feature = "sha")]
