@@ -2,14 +2,6 @@ use std::{future::Future, pin::Pin, sync::atomic::AtomicUsize, time::Duration};
 
 use crate::asyncs::tkocncel;
 
-#[derive(Default)]
-pub struct H2StreamsNums {
-    pub max_send_streams: AtomicUsize,
-    pub num_send_streams: AtomicUsize,
-    pub max_recv_streams: AtomicUsize,
-    pub num_recv_streams: AtomicUsize,
-}
-
 pub struct BoxStream<IO> {
     inner: Box<BoxTcpStreamInr<IO>>,
 }
