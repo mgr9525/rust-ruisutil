@@ -8,7 +8,10 @@ use std::sync::Arc;
 
 use pin_project_lite::pin_project;
 
-use crate::asyncs::tree_node::{self, MaybeDangling};
+#[cfg(feature = "parkings")]
+use crate::asyncs::tree_node;
+#[cfg(not(feature = "parkings"))]
+use crate::asyncs::tree_node_std as tree_node;
 
 /// A token which can be used to signal a cancellation request to one or more
 /// tasks.
@@ -92,7 +95,7 @@ pin_project! {
         // See <https://users.rust-lang.org/t/unsafe-code-review-semi-owning-weak-rwlock-t-guard/95706>
         // for more info.
         #[pin]
-        future: MaybeDangling<tokio::sync::futures::Notified<'static>>,
+        future: tree_node::MaybeDangling<tokio::sync::futures::Notified<'static>>,
         cancellation_token: CancellationToken,
     }
 }
@@ -360,7 +363,7 @@ impl WaitForCancellationFutureOwned {
             // # Safety
             //
             // cancellation_token is dropped after future due to the field ordering.
-            future: MaybeDangling::new(unsafe { Self::new_future(&cancellation_token) }),
+            future: tree_node::MaybeDangling::new(unsafe { Self::new_future(&cancellation_token) }),
             cancellation_token,
         }
     }
@@ -401,7 +404,7 @@ impl Future for WaitForCancellationFutureOwned {
             // # Safety
             //
             // cancellation_token is dropped after future due to the field ordering.
-            this.future.set(MaybeDangling::new(unsafe {
+            this.future.set(tree_node::MaybeDangling::new(unsafe {
                 Self::new_future(this.cancellation_token)
             }));
         }
@@ -478,6 +481,95 @@ impl<F: Future> RunUntilCancelledFutureOwned<F> {
         Self {
             cancellation: cancellation_token.cancelled_owned(),
             future,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CancellationToken;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn cancellation_token_cancel_propagates_to_descendants() {
+        let root = CancellationToken::new();
+        let child = root.child_token();
+        let grandchild = child.child_token();
+
+        root.cancel();
+
+        assert!(root.is_cancelled());
+        assert!(child.is_cancelled());
+        assert!(grandchild.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn cancellation_token_child_cancel_does_not_cancel_parent_or_sibling() {
+        let parent = CancellationToken::new();
+        let child = parent.child_token();
+        let sibling = parent.child_token();
+
+        child.cancel();
+
+        assert!(!parent.is_cancelled());
+        assert!(child.is_cancelled());
+        assert!(!sibling.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn cancellation_token_dropping_child_reparents_grandchildren() {
+        let root = CancellationToken::new();
+        let child = root.child_token();
+        let grandchild = child.child_token();
+
+        drop(child);
+        root.cancel();
+
+        assert!(grandchild.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn cancellation_token_dropping_one_clone_keeps_node_connected() {
+        let root = CancellationToken::new();
+        let child = root.child_token();
+        let child_clone = child.clone();
+
+        drop(child);
+        root.cancel();
+
+        assert!(child_clone.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn cancellation_token_cancelled_owned_future_wakes() {
+        let token = CancellationToken::new();
+        let waiter = token.clone();
+        let task = tokio::spawn(async move {
+            waiter.cancelled_owned().await;
+            true
+        });
+
+        tokio::task::yield_now().await;
+        token.cancel();
+
+        let woke = tokio::time::timeout(Duration::from_secs(1), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(woke);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancellation_token_child_created_during_cancel_is_cancelled_after_cancel_returns() {
+        for _ in 0..100 {
+            let token = CancellationToken::new();
+            let token_for_child = token.clone();
+            let child_task = tokio::spawn(async move { token_for_child.child_token() });
+
+            token.cancel();
+
+            let child = child_task.await.unwrap();
+            assert!(child.is_cancelled());
         }
     }
 }

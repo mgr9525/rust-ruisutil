@@ -8,8 +8,8 @@ edition = "2018"
 [dependencies]
 md5 = "0.7"
 bytes = "1"
-parking_lot = "0.12"
 pin-project-lite = "0.2"
+parking_lot = {version="0.12", optional = true}
 
 futures = {version = "0.3",optional = true}
 # rust-crypto = {version="0.2.36", optional = true}
@@ -25,12 +25,13 @@ tokio = { version = "1", features = ["full"], optional = true }
 [features]
 # default=["asyncs","times"]
 all=["asyncs","times","logs","filesplit","cryptos"]
-alltk=["tokios","times","logs","filesplit","cryptos"]
+alltk=["tokios","times","logs","filesplit","cryptos","parkings"]
 asyncs=["async-std","futures","async-cancellation-token"]
 tokios=["tokio","futures"]
 times=["chrono"]
 logs=["log","filesplit","times"]
 cryptos=["sha"]
+parkings=["parking_lot"]
 sha=["sha1","sha2"]
 filesplit=[]
 mini=[]
