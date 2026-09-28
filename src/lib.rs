@@ -123,28 +123,25 @@ struct WgInner {
     wkr: sync::WakerFut,
 }
 impl WaitGroup {
+    #[cfg(not(any(feature = "asyncs", feature = "tokios")))]
     pub fn new() -> Self {
-        #[cfg(not(any(feature = "asyncs", feature = "tokios")))]
-        {
-            let ctx = Context::background(None);
-            Self {
-                inner: Arc::new(WgInner {
-                    // count: AtomicI32::new(0),
-                    ctx: ctx.clone(),
-                    wkr: sync::Waker::new(&ctx),
-                }),
-            }
+        let ctx = Context::background(None);
+        Self {
+            inner: Arc::new(WgInner {
+                // count: AtomicI32::new(0),
+                ctx: ctx.clone(),
+                wkr: sync::Waker::new(&ctx),
+            }),
         }
-        #[cfg(any(feature = "asyncs", feature = "tokios"))]
-        {
-            let ctx = crate::asyncs::Context::new();
-            Self {
-                inner: Arc::new(WgInner {
-                    // count: AtomicI32::new(0),
-                    ctx: ctx.clone(),
-                    wkr: sync::WakerFut::new(&ctx),
-                }),
-            }
+    }
+    #[cfg(any(feature = "asyncs", feature = "tokios"))]
+    pub fn new(ctx: &crate::asyncs::Context) -> Self {
+        Self {
+            inner: Arc::new(WgInner {
+                // count: AtomicI32::new(0),
+                ctx: ctx.clone(),
+                wkr: sync::WakerFut::new(&ctx),
+            }),
         }
     }
     pub fn stop(&self) {
@@ -156,6 +153,9 @@ impl WaitGroup {
     #[cfg(not(any(feature = "asyncs", feature = "tokios")))]
     pub fn wait(&self, ctxs: Option<&Context>) {
         while !self.inner.ctx.done() {
+            if self.done() {
+                break;
+            }
             if let Some(v) = ctxs {
                 if v.done() {
                     break;
@@ -168,16 +168,14 @@ impl WaitGroup {
         }
     }
     #[cfg(any(feature = "asyncs", feature = "tokios"))]
-    pub async fn wait(&self, ctxs: Option<&Context>) {
+    pub async fn wait(&self) {
         let _ = self
             .inner
             .ctx
             .wait_fut(async {
                 loop {
-                    if let Some(v) = ctxs {
-                        if v.done() {
-                            break;
-                        }
+                    if self.done() {
+                        break;
                     }
                     let _ =
                         asyncs::timeout(Duration::from_millis(100), self.inner.wkr.clone()).await;
@@ -433,10 +431,11 @@ mod tests {
     #[cfg(any(feature = "asyncs", feature = "tokios"))]
     #[test]
     fn wgs() {
-        let wgt = crate::WaitGroup::new();
+        let ctx = crate::asyncs::Context::new();
+        let wgt = crate::WaitGroup::new(&ctx);
         let wgtcg = wgt.clone();
         let _ = crate::asyncs::block_on(async move {
-            let wg = crate::WaitGroup::new();
+            let wg = crate::WaitGroup::new(&ctx);
             let wgc = wg.clone();
             let wgtc = wgtcg.clone();
             crate::asyncs::task::spawn(async move {
@@ -472,7 +471,7 @@ mod tests {
                 std::mem::drop(wgtc);
             });
             println!("start waits!!!!");
-            wg.wait(None).await;
+            wg.wait().await;
             println!("the end1!!!!");
             Ok(())
         });

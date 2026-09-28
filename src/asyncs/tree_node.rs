@@ -104,6 +104,22 @@ pub(crate) fn child_node(parent: &Arc<TreeNode>) -> Arc<TreeNode> {
     }
 
     let mut locked_parent = parent.inner.lock();
+    // The parent may have been cancelled after the fast-path check while we were
+    // waiting for its mutex.
+    if parent.is_cancelled.load(Relaxed) {
+        return Arc::new(TreeNode {
+            is_cancelled: AtomicBool::new(true),
+            inner: parking_lot::Mutex::new(Inner {
+                parent: None,
+                parent_idx: 0,
+                children: vec![],
+                // is_cancelled: true,
+                num_handles: 1,
+            }),
+            waker: tokio::sync::Notify::new(),
+        });
+    }
+
     let child = Arc::new(TreeNode {
         is_cancelled: AtomicBool::new(false),
         inner: parking_lot::Mutex::new(Inner {
@@ -156,8 +172,6 @@ where
         Option<parking_lot::MutexGuard<'_, Inner>>,
     ) -> Ret,
 {
-    use std::sync::TryLockError;
-
     let mut locked_node = node.inner.lock();
 
     // Every time this fails, the number of ancestors of the node decreases,
